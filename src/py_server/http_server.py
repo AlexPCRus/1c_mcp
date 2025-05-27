@@ -147,8 +147,7 @@ class MCPHttpServer:
 			
 			try:
 				# Получаем JSON данные
-				data = await request.json()
-				logger.debug(f"Получено сообщение от клиента {client_id}: {data}")
+				logger.debug(f"Получено сообщение от клиента {client_id}")
 				
 				# Передаем сообщение в SSE транспорт
 				sse_transport = self.sse_transports[client_id]
