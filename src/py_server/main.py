@@ -47,12 +47,13 @@ def create_parser() -> argparse.ArgumentParser:
   python -m src.py_server http --env-file .env
 
 Переменные окружения:
-  MCP_ONEC_URL       - URL базы 1С (обязательно)
-  MCP_ONEC_USERNAME  - Имя пользователя 1С (обязательно)
-  MCP_ONEC_PASSWORD  - Пароль пользователя 1С (обязательно)
-  MCP_HOST           - Хост HTTP-сервера (по умолчанию: 127.0.0.1)
-  MCP_PORT           - Порт HTTP-сервера (по умолчанию: 8000)
-  MCP_LOG_LEVEL      - Уровень логирования (по умолчанию: INFO)
+  MCP_ONEC_URL           - URL базы 1С (обязательно)
+  MCP_ONEC_USERNAME      - Имя пользователя 1С (обязательно)
+  MCP_ONEC_PASSWORD      - Пароль пользователя 1С (обязательно)
+  MCP_ONEC_SERVICE_ROOT  - Корневой URL HTTP-сервиса (по умолчанию: mcp)
+  MCP_HOST               - Хост HTTP-сервера (по умолчанию: 127.0.0.1)
+  MCP_PORT               - Порт HTTP-сервера (по умолчанию: 8000)
+  MCP_LOG_LEVEL          - Уровень логирования (по умолчанию: INFO)
 		"""
 	)
 	
@@ -104,6 +105,11 @@ def create_parser() -> argparse.ArgumentParser:
 			help="Пароль пользователя 1С"
 		)
 		subparser.add_argument(
+			"--onec-service-root",
+			type=str,
+			help="Корневой URL HTTP-сервиса в 1С"
+		)
+		subparser.add_argument(
 			"--log-level",
 			type=str,
 			choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -148,6 +154,8 @@ async def main():
 			config.onec_username = args.onec_username
 		if args.onec_password:
 			config.onec_password = args.onec_password
+		if args.onec_service_root:
+			config.onec_service_root = args.onec_service_root
 		if args.log_level:
 			config.log_level = args.log_level
 			

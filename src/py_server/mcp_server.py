@@ -45,10 +45,12 @@ class MCPProxy:
 		self.onec_client = OneCClient(
 			base_url=self.config.onec_url,
 			username=self.config.onec_username,
-			password=self.config.onec_password
+			password=self.config.onec_password,
+			service_root=self.config.onec_service_root
 		)
 		
 		logger.info(f"Подключение к 1С: {self.config.onec_url}")
+		logger.info(f"HTTP-сервис: {self.config.onec_service_root}")
 		
 		try:
 			# Проверяем подключение к 1С

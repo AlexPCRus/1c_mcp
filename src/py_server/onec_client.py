@@ -13,21 +13,27 @@ logger = logging.getLogger(__name__)
 class OneCClient:
 	"""Клиент для взаимодействия с HTTP-сервисом 1С."""
 	
-	def __init__(self, base_url: str, username: str, password: str):
+	def __init__(self, base_url: str, username: str, password: str, service_root: str = "mcp"):
 		"""Инициализация клиента.
 		
 		Args:
 			base_url: Базовый URL 1С (например, http://localhost/base)
 			username: Имя пользователя
 			password: Пароль
+			service_root: Корневой URL HTTP-сервиса (по умолчанию "mcp")
 		"""
 		self.base_url = base_url.rstrip('/')
+		self.service_root = service_root.strip('/')
 		self.auth = httpx.BasicAuth(username, password)
 		self.client = httpx.AsyncClient(
 			auth=self.auth,
 			timeout=30.0,
 			headers={"Content-Type": "application/json"}
 		)
+		
+		# Формируем базовый URL для HTTP-сервиса
+		self.service_base_url = f"{self.base_url}/hs/{self.service_root}"
+		logger.debug(f"Базовый URL HTTP-сервиса: {self.service_base_url}")
 	
 	async def get_manifest(self) -> Dict[str, Any]:
 		"""Получить манифест от 1С.
@@ -36,7 +42,7 @@ class OneCClient:
 			Словарь с манифестом MCP-сервера
 		"""
 		try:
-			url = f"{self.base_url}/mcp/manifest"
+			url = f"{self.service_base_url}/manifest"
 			logger.debug(f"Запрос манифеста: {url}")
 			
 			response = await self.client.get(url)
@@ -64,7 +70,7 @@ class OneCClient:
 			Результат выполнения метода
 		"""
 		try:
-			url = f"{self.base_url}/mcp/rpc"
+			url = f"{self.service_base_url}/rpc"
 			
 			# Формируем JSON-RPC запрос
 			rpc_request = {
@@ -135,10 +141,27 @@ class OneCClient:
 		content = []
 		if "content" in result:
 			for item in result["content"]:
-				if item.get("type") == "text":
+				content_type = item.get("type")
+				
+				if content_type == "text":
 					content.append(types.TextContent(
 						type="text",
 						text=item.get("text", "")
+					))
+				
+				elif content_type == "image":
+					content.append(types.ImageContent(
+						type="image",
+						data=item.get("data", ""),
+						mimeType=item.get("mimeType", "image/png")
+					))
+				
+				else:
+					# Неизвестный тип - логируем предупреждение и обрабатываем как текст
+					logger.warning(f"Неизвестный тип контента: {content_type}, обрабатываем как текст")
+					content.append(types.TextContent(
+						type="text",
+						text=str(item.get("text", item))
 					))
 		
 		return types.CallToolResult(

@@ -84,7 +84,8 @@ python -m src.py_server http --env-file custom.env
 python -m src.py_server stdio \
   --onec-url http://server/base \
   --onec-username admin \
-  --onec-password secret
+  --onec-password secret \
+  --onec-service-root custom_mcp
 ```
 
 ## Конфигурация
@@ -96,6 +97,7 @@ python -m src.py_server stdio \
 | `MCP_ONEC_URL` | URL базы 1С | - | ✅ |
 | `MCP_ONEC_USERNAME` | Имя пользователя 1С | - | ✅ |
 | `MCP_ONEC_PASSWORD` | Пароль пользователя 1С | - | ✅ |
+| `MCP_ONEC_SERVICE_ROOT` | Корневой URL HTTP-сервиса | `mcp` | ❌ |
 | `MCP_HOST` | Хост HTTP-сервера | `127.0.0.1` | ❌ |
 | `MCP_PORT` | Порт HTTP-сервера | `8000` | ❌ |
 | `MCP_SERVER_NAME` | Имя MCP-сервера | `1C-MCP-Proxy` | ❌ |
@@ -105,9 +107,19 @@ python -m src.py_server stdio \
 
 ## Интеграция с 1С
 
-Прокси ожидает, что в 1С реализован HTTP-сервис с корневым URL `/mcp` и двумя endpoints:
+Прокси ожидает, что в 1С реализован HTTP-сервис и обращается к нему по стандартной схеме 1С:
 
-### GET /mcp/manifest
+```
+<URL базы 1С>/hs/<корневой URL HTTP-сервиса>/<endpoint>
+```
+
+По умолчанию корневой URL HTTP-сервиса - `mcp`, но его можно изменить через параметр `MCP_ONEC_SERVICE_ROOT`.
+
+Примеры URL:
+- Манифест: `http://localhost/base/hs/mcp/manifest`
+- RPC: `http://localhost/base/hs/mcp/rpc`
+
+### GET /hs/{service_root}/manifest
 Возвращает манифест MCP-сервера с информацией о capabilities:
 ```json
 {
@@ -119,7 +131,7 @@ python -m src.py_server stdio \
 }
 ```
 
-### POST /mcp/rpc
+### POST /hs/{service_root}/rpc
 Обрабатывает JSON-RPC запросы для всех MCP-операций:
 - `tools/list` - список инструментов
 - `tools/call` - вызов инструмента
@@ -138,6 +150,47 @@ python -m src.py_server stdio \
 }
 ```
 
+Примеры ответов с разными типами контента:
+
+**Текстовый ответ:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Операция выполнена успешно"
+      }
+    ],
+    "isError": false
+  }
+}
+```
+
+**Ответ с изображением:**
+```json
+{
+  "jsonrpc": "2.0", 
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "График продаж за месяц:"
+      },
+      {
+        "type": "image",
+        "data": "iVBORw0KGgoAAAANSUhEUgAA...",
+        "mimeType": "image/png"
+      }
+    ],
+    "isError": false
+  }
+}
+```
+
 ## Примеры использования
 
 ### С Claude Desktop
@@ -153,7 +206,8 @@ python -m src.py_server stdio \
       "env": {
         "MCP_ONEC_URL": "http://localhost/your_base",
         "MCP_ONEC_USERNAME": "username",
-        "MCP_ONEC_PASSWORD": "password"
+        "MCP_ONEC_PASSWORD": "password",
+        "MCP_ONEC_SERVICE_ROOT": "mcp"
       }
     }
   }
@@ -198,4 +252,4 @@ curl http://localhost:8000/health
 
 ## Лицензия
 
-MIT License 
+MIT License

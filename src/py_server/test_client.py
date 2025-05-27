@@ -24,8 +24,12 @@ async def test_onec_connection(config):
 			auth=httpx.BasicAuth(config.onec_username, config.onec_password),
 			timeout=10.0
 		) as client:
+			# Формируем базовый URL для HTTP-сервиса
+			service_base_url = f"{config.onec_url.rstrip('/')}/hs/{config.onec_service_root.strip('/')}"
+			print(f"Базовый URL HTTP-сервиса: {service_base_url}")
+			
 			# Тест манифеста
-			manifest_url = f"{config.onec_url}/mcp/manifest"
+			manifest_url = f"{service_base_url}/manifest"
 			print(f"Запрос манифеста: {manifest_url}")
 			
 			response = await client.get(manifest_url)
@@ -35,7 +39,7 @@ async def test_onec_connection(config):
 			print(f"✅ Манифест получен: {json.dumps(manifest, indent=2, ensure_ascii=False)}")
 			
 			# Тест RPC
-			rpc_url = f"{config.onec_url}/mcp/rpc"
+			rpc_url = f"{service_base_url}/rpc"
 			rpc_request = {
 				"jsonrpc": "2.0",
 				"id": 1,
