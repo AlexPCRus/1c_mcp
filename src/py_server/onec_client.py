@@ -1,0 +1,260 @@
+"""Клиент для взаимодействия с 1С."""
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+import httpx
+from mcp import types
+
+
+logger = logging.getLogger(__name__)
+
+
+class OneCClient:
+	"""Клиент для взаимодействия с HTTP-сервисом 1С."""
+	
+	def __init__(self, base_url: str, username: str, password: str):
+		"""Инициализация клиента.
+		
+		Args:
+			base_url: Базовый URL 1С (например, http://localhost/base)
+			username: Имя пользователя
+			password: Пароль
+		"""
+		self.base_url = base_url.rstrip('/')
+		self.auth = httpx.BasicAuth(username, password)
+		self.client = httpx.AsyncClient(
+			auth=self.auth,
+			timeout=30.0,
+			headers={"Content-Type": "application/json"}
+		)
+	
+	async def get_manifest(self) -> Dict[str, Any]:
+		"""Получить манифест от 1С.
+		
+		Returns:
+			Словарь с манифестом MCP-сервера
+		"""
+		try:
+			url = f"{self.base_url}/mcp/manifest"
+			logger.debug(f"Запрос манифеста: {url}")
+			
+			response = await self.client.get(url)
+			response.raise_for_status()
+			
+			manifest = response.json()
+			logger.debug(f"Получен манифест: {manifest}")
+			return manifest
+			
+		except httpx.HTTPError as e:
+			logger.error(f"Ошибка при получении манифеста: {e}")
+			raise
+		except json.JSONDecodeError as e:
+			logger.error(f"Ошибка парсинга JSON манифеста: {e}")
+			raise
+	
+	async def call_rpc(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+		"""Выполнить JSON-RPC запрос к 1С.
+		
+		Args:
+			method: Имя метода
+			params: Параметры метода
+			
+		Returns:
+			Результат выполнения метода
+		"""
+		try:
+			url = f"{self.base_url}/mcp/rpc"
+			
+			# Формируем JSON-RPC запрос
+			rpc_request = {
+				"jsonrpc": "2.0",
+				"id": 1,
+				"method": method,
+				"params": params or {}
+			}
+			
+			logger.debug(f"JSON-RPC запрос: {rpc_request}")
+			
+			response = await self.client.post(url, json=rpc_request)
+			response.raise_for_status()
+			
+			rpc_response = response.json()
+			logger.debug(f"JSON-RPC ответ: {rpc_response}")
+			
+			# Проверяем на ошибки JSON-RPC
+			if "error" in rpc_response:
+				error = rpc_response["error"]
+				raise Exception(f"JSON-RPC ошибка {error.get('code', 'unknown')}: {error.get('message', 'Unknown error')}")
+			
+			return rpc_response.get("result", {})
+			
+		except httpx.HTTPError as e:
+			logger.error(f"Ошибка HTTP при вызове RPC: {e}")
+			raise
+		except json.JSONDecodeError as e:
+			logger.error(f"Ошибка парсинга JSON ответа RPC: {e}")
+			raise
+	
+	async def list_tools(self) -> List[types.Tool]:
+		"""Получить список доступных инструментов.
+		
+		Returns:
+			Список инструментов MCP
+		"""
+		result = await self.call_rpc("tools/list")
+		tools_data = result.get("tools", [])
+		
+		tools = []
+		for tool_data in tools_data:
+			tool = types.Tool(
+				name=tool_data["name"],
+				description=tool_data.get("description", ""),
+				inputSchema=tool_data.get("inputSchema", {})
+			)
+			tools.append(tool)
+		
+		return tools
+	
+	async def call_tool(self, name: str, arguments: Dict[str, Any]) -> types.CallToolResult:
+		"""Вызвать инструмент.
+		
+		Args:
+			name: Имя инструмента
+			arguments: Аргументы инструмента
+			
+		Returns:
+			Результат выполнения инструмента
+		"""
+		result = await self.call_rpc("tools/call", {
+			"name": name,
+			"arguments": arguments
+		})
+		
+		# Преобразуем результат в формат MCP
+		content = []
+		if "content" in result:
+			for item in result["content"]:
+				if item.get("type") == "text":
+					content.append(types.TextContent(
+						type="text",
+						text=item.get("text", "")
+					))
+		
+		return types.CallToolResult(
+			content=content,
+			isError=result.get("isError", False)
+		)
+	
+	async def list_resources(self) -> List[types.Resource]:
+		"""Получить список доступных ресурсов.
+		
+		Returns:
+			Список ресурсов MCP
+		"""
+		result = await self.call_rpc("resources/list")
+		resources_data = result.get("resources", [])
+		
+		resources = []
+		for resource_data in resources_data:
+			resource = types.Resource(
+				uri=resource_data["uri"],
+				name=resource_data.get("name", ""),
+				description=resource_data.get("description", ""),
+				mimeType=resource_data.get("mimeType")
+			)
+			resources.append(resource)
+		
+		return resources
+	
+	async def read_resource(self, uri: str) -> types.ReadResourceResult:
+		"""Прочитать ресурс.
+		
+		Args:
+			uri: URI ресурса
+			
+		Returns:
+			Содержимое ресурса
+		"""
+		result = await self.call_rpc("resources/read", {"uri": uri})
+		
+		# Преобразуем результат в формат MCP
+		contents = []
+		if "contents" in result:
+			for item in result["contents"]:
+				if item.get("type") == "text":
+					contents.append(types.TextResourceContents(
+						uri=uri,
+						mimeType=item.get("mimeType", "text/plain"),
+						text=item.get("text", "")
+					))
+		
+		return types.ReadResourceResult(contents=contents)
+	
+	async def list_prompts(self) -> List[types.Prompt]:
+		"""Получить список доступных промптов.
+		
+		Returns:
+			Список промптов MCP
+		"""
+		result = await self.call_rpc("prompts/list")
+		prompts_data = result.get("prompts", [])
+		
+		prompts = []
+		for prompt_data in prompts_data:
+			arguments = []
+			if "arguments" in prompt_data:
+				for arg_data in prompt_data["arguments"]:
+					arguments.append(types.PromptArgument(
+						name=arg_data["name"],
+						description=arg_data.get("description", ""),
+						required=arg_data.get("required", False)
+					))
+			
+			prompt = types.Prompt(
+				name=prompt_data["name"],
+				description=prompt_data.get("description", ""),
+				arguments=arguments
+			)
+			prompts.append(prompt)
+		
+		return prompts
+	
+	async def get_prompt(self, name: str, arguments: Optional[Dict[str, str]] = None) -> types.GetPromptResult:
+		"""Получить промпт.
+		
+		Args:
+			name: Имя промпта
+			arguments: Аргументы промпта
+			
+		Returns:
+			Результат промпта
+		"""
+		result = await self.call_rpc("prompts/get", {
+			"name": name,
+			"arguments": arguments or {}
+		})
+		
+		# Преобразуем результат в формат MCP
+		messages = []
+		if "messages" in result:
+			for msg_data in result["messages"]:
+				content = types.TextContent(
+					type="text",
+					text=msg_data.get("content", {}).get("text", "")
+				)
+				
+				message = types.PromptMessage(
+					role=msg_data.get("role", "user"),
+					content=content
+				)
+				messages.append(message)
+		
+		return types.GetPromptResult(
+			description=result.get("description", ""),
+			messages=messages
+		)
+	
+	async def close(self):
+		"""Закрыть клиент."""
+		await self.client.aclose() 

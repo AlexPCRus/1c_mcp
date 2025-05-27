@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" format="Hierarchical" version="2.17">
+	<ConfigVersions>
+		<Metadata name="Configuration.MCP_Сервер" id="471acdde-293c-497c-bd55-e6ab48d98dc4" configVersion="fa9e246d48c66ba194f4f972be8ef081cf9f88e4"/>
+		<Metadata name="Language.Русский" id="3934c8ff-fc70-4830-a011-1fe02d9fe553" configVersion="63c9178a39359b6f367ff2d917ab802f100cd616"/>
+		<Metadata name="Role.mcp_ОсновнаяРоль" id="b39cb348-412f-4c3d-b9f9-4374f9982f6c" configVersion="d624cfcc695192645683745a802e48a6bfcefd40"/>
+	</ConfigVersions>
+</ConfigDumpInfo>
