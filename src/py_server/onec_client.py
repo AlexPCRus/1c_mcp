@@ -205,11 +205,42 @@ class OneCClient:
 		contents = []
 		if "contents" in result:
 			for item in result["contents"]:
-				if item.get("type") == "text":
+				content_type = item.get("type")
+				
+				if content_type == "text":
 					contents.append(types.TextResourceContents(
 						uri=uri,
 						mimeType=item.get("mimeType", "text/plain"),
 						text=item.get("text", "")
+					))
+				
+				elif content_type == "blob":
+					contents.append(types.BlobResourceContents(
+						uri=uri,
+						mimeType=item.get("mimeType", "application/octet-stream"),
+						blob=item.get("blob", "")
+					))
+				
+				else:
+					# Неизвестный тип - логируем предупреждение и обрабатываем как текст
+					logger.warning(f"Неизвестный тип ресурса: {content_type}, обрабатываем как текст")
+					
+					# Пытаемся извлечь текст разными способами
+					text_content = ""
+					if "text" in item:
+						text_content = str(item["text"])
+					elif "data" in item:
+						text_content = str(item["data"])
+					elif "content" in item:
+						text_content = str(item["content"])
+					else:
+						# Если ничего подходящего нет, используем JSON представление
+						text_content = f"Неизвестный тип ресурса '{content_type}': {json.dumps(item, ensure_ascii=False)}"
+					
+					contents.append(types.TextResourceContents(
+						uri=uri,
+						mimeType=item.get("mimeType", "text/plain"),
+						text=text_content
 					))
 		
 		return types.ReadResourceResult(contents=contents)

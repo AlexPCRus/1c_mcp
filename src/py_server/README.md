@@ -150,43 +150,38 @@ python -m src.py_server stdio \
 }
 ```
 
-Примеры ответов с разными типами контента:
+Примеры ответов с разными типами ресурсов:
 
-**Текстовый ответ:**
+**Текстовый ресурс:**
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "content": [
+    "contents": [
       {
         "type": "text",
-        "text": "Операция выполнена успешно"
+        "text": "Содержимое текстового файла",
+        "mimeType": "text/plain"
       }
-    ],
-    "isError": false
+    ]
   }
 }
 ```
 
-**Ответ с изображением:**
+**Бинарный ресурс (изображение, документ):**
 ```json
 {
-  "jsonrpc": "2.0", 
+  "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "content": [
+    "contents": [
       {
-        "type": "text",
-        "text": "График продаж за месяц:"
-      },
-      {
-        "type": "image",
-        "data": "iVBORw0KGgoAAAANSUhEUgAA...",
+        "type": "blob",
+        "blob": "iVBORw0KGgoAAAANSUhEUgAA...",
         "mimeType": "image/png"
       }
-    ],
-    "isError": false
+    ]
   }
 }
 ```
