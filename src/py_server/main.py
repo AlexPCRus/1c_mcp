@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 from typing import Optional
 import argparse
@@ -139,25 +140,28 @@ async def main():
 		# Пытаемся загрузить .env из текущей директории
 		load_dotenv()
 	
-	# Получаем конфигурацию
+	# ИСПРАВЛЕНИЕ: Устанавливаем переменные окружения из аргументов ДО создания Config
+	if args.onec_url:
+		os.environ["MCP_ONEC_URL"] = args.onec_url
+	if args.onec_username:
+		os.environ["MCP_ONEC_USERNAME"] = args.onec_username
+	if args.onec_password:
+		os.environ["MCP_ONEC_PASSWORD"] = args.onec_password
+	if args.onec_service_root:
+		os.environ["MCP_ONEC_SERVICE_ROOT"] = args.onec_service_root
+	if hasattr(args, 'host') and args.host:
+		os.environ["MCP_HOST"] = args.host
+	if hasattr(args, 'port') and args.port:
+		os.environ["MCP_PORT"] = str(args.port)
+	if args.log_level:
+		os.environ["MCP_LOG_LEVEL"] = args.log_level
+	
+	# Получаем конфигурацию (теперь валидация пройдет успешно)
 	try:
 		config = get_config()
 		
-		# Переопределяем параметры из командной строки
-		if hasattr(args, 'host') and args.host:
-			config.host = args.host
-		if hasattr(args, 'port') and args.port:
-			config.port = args.port
-		if args.onec_url:
-			config.onec_url = args.onec_url
-		if args.onec_username:
-			config.onec_username = args.onec_username
-		if args.onec_password:
-			config.onec_password = args.onec_password
-		if args.onec_service_root:
-			config.onec_service_root = args.onec_service_root
-		if args.log_level:
-			config.log_level = args.log_level
+		# Убираем старые переопределения - теперь они не нужны
+		# Все значения уже установлены через переменные окружения
 			
 	except Exception as e:
 		print(f"Ошибка конфигурации: {e}")
