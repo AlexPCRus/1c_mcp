@@ -117,7 +117,7 @@ class MCPProxy:
 				return []
 		
 		@self.server.read_resource()
-		async def handle_read_resource(uri: str) -> str:
+		async def handle_read_resource(uri: str) -> types.ReadResourceResult:
 			"""Прочитать ресурс."""
 			ctx = self.server.request_context
 			onec_client: OneCClient = ctx.lifespan_context["onec_client"]
@@ -125,17 +125,19 @@ class MCPProxy:
 			try:
 				logger.info(f"Чтение ресурса: {uri}")
 				result = await onec_client.read_resource(uri)
-				
-				# Возвращаем первый текстовый контент
-				if result.contents:
-					for content in result.contents:
-						if hasattr(content, 'text'):
-							return content.text
-				
-				return ""
+				return result
 			except Exception as e:
 				logger.error(f"Ошибка при чтении ресурса {uri}: {e}")
-				return f"Ошибка чтения ресурса: {str(e)}"
+				# Возвращаем ReadResourceResult с ошибкой
+				return types.ReadResourceResult(
+					contents=[
+						types.TextResourceContents(
+							uri=uri,
+							mimeType="text/plain",
+							text=f"Ошибка чтения ресурса: {str(e)}"
+						)
+					]
+				)
 		
 		@self.server.list_prompts()
 		async def handle_list_prompts() -> List[types.Prompt]:
