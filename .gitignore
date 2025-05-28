@@ -215,3 +215,5 @@ yarn-error.log*
 *.msi
 *.exe
 *.dmg 
+
+src/1c_ext/ConfigDumpInfo.xml

@@ -65,7 +65,15 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Subsystem>mcp_MCPСервер</Subsystem>
 			<Role>mcp_ОсновнаяРоль</Role>
+			<CommonModule>mcp_ОбщегоНазначения</CommonModule>
+			<CommonModule>mcp_КонтейнерыПовтИсп</CommonModule>
+			<CommonModule>mcp_СтруктурыПрограммногоИнтерфейса</CommonModule>
+			<HTTPService>mcp_APIBackend</HTTPService>
+			<DataProcessor>mcp_УправлениеСервером</DataProcessor>
+			<DataProcessor>mcp_ИнструментДанныеОКонфигурации</DataProcessor>
+			<DataProcessor>mcp_РесурсОписаниеСинтаксисаВстроенногоЯзыка</DataProcessor>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>
