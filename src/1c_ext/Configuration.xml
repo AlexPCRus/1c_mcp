@@ -69,7 +69,8 @@
 			<Role>mcp_ОсновнаяРоль</Role>
 			<CommonModule>mcp_ОбщегоНазначения</CommonModule>
 			<CommonModule>mcp_КонтейнерыПовтИсп</CommonModule>
-			<CommonModule>mcp_ОпсаниеПрограммногоИнтерфейса</CommonModule>
+			<CommonModule>mcp_Метаданные</CommonModule>
+			<CommonModule>mcp_Выполнение</CommonModule>
 			<HTTPService>mcp_APIBackend</HTTPService>
 			<DataProcessor>mcp_УправлениеСервером</DataProcessor>
 			<DataProcessor>mcp_ИнструментДанныеОКонфигурации</DataProcessor>

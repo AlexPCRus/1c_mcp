@@ -68,7 +68,7 @@
 							</Synonym>
 							<Comment/>
 							<HTTPMethod>POST</HTTPMethod>
-							<Handler/>
+							<Handler>rpcPOST</Handler>
 						</Properties>
 					</Method>
 				</ChildObjects>
