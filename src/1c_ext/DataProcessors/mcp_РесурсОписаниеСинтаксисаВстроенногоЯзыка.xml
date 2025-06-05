@@ -27,6 +27,8 @@
 			<ExtendedPresentation/>
 			<Explanation/>
 		</Properties>
-		<ChildObjects/>
+		<ChildObjects>
+			<Template>СинтаксисВстроенногоЯзыка</Template>
+		</ChildObjects>
 	</DataProcessor>
 </MetaDataObject>
