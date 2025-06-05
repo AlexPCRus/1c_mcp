@@ -83,13 +83,13 @@ class MCPHttpServer:
 			try:
 				# Проверяем подключение к 1С через прокси
 				if hasattr(self.mcp_proxy, 'onec_client') and self.mcp_proxy.onec_client:
-					await self.mcp_proxy.onec_client.get_manifest()
+					await self.mcp_proxy.onec_client.check_health()
 					return {"status": "healthy", "onec_connection": "ok"}
 				else:
 					return {"status": "starting", "onec_connection": "not_initialized"}
 			except Exception as e:
 				logger.error(f"Ошибка проверки здоровья: {e}")
-				return {"status": "unhealthy", "error": str(e)}
+				return {"status": "unhealthy", "onec_connection": "error", "error_details": str(e)}
 		
 		@self.app.get("/sse")
 		async def handle_sse(request: Request):

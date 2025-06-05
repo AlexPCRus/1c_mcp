@@ -35,28 +35,34 @@ class OneCClient:
 		self.service_base_url = f"{self.base_url}/hs/{self.service_root}"
 		logger.debug(f"Базовый URL HTTP-сервиса: {self.service_base_url}")
 	
-	async def get_manifest(self) -> Dict[str, Any]:
-		"""Получить манифест от 1С.
-		
+	async def check_health(self) -> bool:
+		"""Проверить состояние HTTP-сервиса 1С.
+
 		Returns:
-			Словарь с манифестом MCP-сервера
+			True, если сервис доступен и здоров, иначе вызывает исключение.
 		"""
 		try:
-			url = f"{self.service_base_url}/manifest"
-			logger.debug(f"Запрос манифеста: {url}")
-			
+			url = f"{self.service_base_url}/health"
+			logger.debug(f"Запрос состояния здоровья: {url}")
+
 			response = await self.client.get(url)
 			response.raise_for_status()
-			
-			manifest = response.json()
-			logger.debug(f"Получен манифест: {manifest}")
-			return manifest
-			
+
+			# Проверяем JSON ответ от 1C healthGET
+			try:
+				response_json = response.json()
+				if response_json.get("status") == "ok":
+					logger.debug("Сервис 1С доступен и здоров (статус OK).")
+					return True
+				else:
+					logger.warning(f"1C health check вернул неожиданный статус: {response_json}")
+					raise httpx.HTTPStatusError(f"1C service reported not healthy: {response_json}", request=response.request, response=response)
+			except json.JSONDecodeError as e:
+				logger.error(f"Ошибка парсинга JSON ответа health-check 1С: {response.text}")
+				raise httpx.HTTPStatusError(f"Invalid JSON response from 1C health check: {e}", request=response.request, response=response)
+
 		except httpx.HTTPError as e:
-			logger.error(f"Ошибка при получении манифеста: {e}")
-			raise
-		except json.JSONDecodeError as e:
-			logger.error(f"Ошибка парсинга JSON манифеста: {e}")
+			logger.error(f"Ошибка HTTP при проверке состояния 1С: {e}")
 			raise
 	
 	async def call_rpc(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

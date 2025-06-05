@@ -54,8 +54,8 @@ class MCPProxy:
 		
 		try:
 			# Проверяем подключение к 1С
-			await self.onec_client.get_manifest()
-			logger.info("Успешное подключение к 1С")
+			await self.onec_client.check_health()
+			logger.info("Успешное подключение к 1С (проверка health)")
 			
 			yield {"onec_client": self.onec_client}
 		finally:
