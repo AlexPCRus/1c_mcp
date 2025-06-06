@@ -15,35 +15,6 @@
 			<SessionMaxAge>20</SessionMaxAge>
 		</Properties>
 		<ChildObjects>
-			<URLTemplate uuid="ba188f2e-58fb-4117-b7b5-7f3aa9c409db">
-				<Properties>
-					<Name>manifest</Name>
-					<Synonym>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Manifest</v8:content>
-						</v8:item>
-					</Synonym>
-					<Comment/>
-					<Template>/manifest</Template>
-				</Properties>
-				<ChildObjects>
-					<Method uuid="51e045de-cbd7-4711-a51e-265bd5cc0d73">
-						<Properties>
-							<Name>GET</Name>
-							<Synonym>
-								<v8:item>
-									<v8:lang>ru</v8:lang>
-									<v8:content>GET</v8:content>
-								</v8:item>
-							</Synonym>
-							<Comment/>
-							<HTTPMethod>GET</HTTPMethod>
-							<Handler>manifestGET</Handler>
-						</Properties>
-					</Method>
-				</ChildObjects>
-			</URLTemplate>
 			<URLTemplate uuid="a669bf45-5a33-4e83-9605-448e3d5029ce">
 				<Properties>
 					<Name>rpc</Name>
