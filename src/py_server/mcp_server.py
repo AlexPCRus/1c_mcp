@@ -10,8 +10,8 @@ from mcp.server.models import InitializationOptions
 from mcp.server.lowlevel import NotificationOptions
 from mcp import types
 
-from .onec_client import OneCClient
-from .config import Config
+from onec_client import OneCClient
+from config import Config
 
 
 logger = logging.getLogger(__name__)
