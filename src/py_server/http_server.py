@@ -13,6 +13,8 @@ import uvicorn
 
 from mcp.server.sse import SseServerTransport
 from mcp.server.models import InitializationOptions
+from starlette.applications import Starlette
+from starlette.routing import Mount, Route
 
 from .mcp_server import MCPProxy
 from .config import Config
@@ -48,11 +50,11 @@ class MCPHttpServer:
 			allow_headers=["*"],
 		)
 		
-		# Регистрация маршрутов
-		self._register_routes()
+		# Создаем и монтируем Starlette приложение для SSE
+		self._mount_sse_app()
 		
-		# Хранилище SSE транспортов
-		self.sse_transports: Dict[str, SseServerTransport] = {}
+		# Регистрация основных маршрутов
+		self._register_routes()
 	
 	@asynccontextmanager
 	async def _lifespan(self, app: FastAPI):
@@ -61,19 +63,61 @@ class MCPHttpServer:
 		yield
 		logger.info("Остановка HTTP-сервера MCP")
 	
-	def _register_routes(self):
-		"""Регистрация маршрутов."""
+	def _create_sse_starlette_app(self) -> Starlette:
+		"""Создание Starlette приложения для обработки SSE."""
+		# Создаем SSE транспорт для обработки сообщений
+		sse_transport = SseServerTransport("/messages/")
 		
-		@self.app.get("/")
+		async def handle_sse(request):
+			"""Обработчик SSE подключений."""
+			logger.info("Новое SSE подключение")
+			
+			try:
+				# Подключаем SSE с использованием транспорта
+				async with sse_transport.connect_sse(
+					request.scope, 
+					request.receive, 
+					request._send
+				) as streams:
+					# Запускаем MCP сервер с потоками
+					await self.mcp_proxy.server.run(
+						streams[0], 
+						streams[1], 
+						self.mcp_proxy.get_initialization_options()
+					)
+			except Exception as e:
+				logger.error(f"Ошибка в SSE обработчике: {e}")
+				raise
+			finally:
+				logger.info("SSE подключение закрыто")
+		
+		# Создаем маршруты для Starlette приложения
+		routes = [
+			Route("/sse", endpoint=handle_sse),
+			Mount("/messages/", app=sse_transport.handle_post_message),
+		]
+		
+		return Starlette(routes=routes)
+	
+	def _mount_sse_app(self):
+		"""Монтирование Starlette приложения для SSE."""
+		sse_app = self._create_sse_starlette_app()
+		self.app.mount("/", sse_app)
+	
+	def _register_routes(self):
+		"""Регистрация основных маршрутов."""
+		
+		@self.app.get("/info")
 		async def root():
-			"""Корневой маршрут."""
+			"""Информационный маршрут (не конфликтует с SSE)."""
 			return {
 				"name": self.config.server_name,
 				"version": self.config.server_version,
 				"description": "MCP-прокси для взаимодействия с 1С",
 				"endpoints": {
 					"sse": "/sse",
-					"messages": "/messages"
+					"messages": "/messages/",
+					"health": "/health"
 				}
 			}
 		
@@ -90,81 +134,6 @@ class MCPHttpServer:
 			except Exception as e:
 				logger.error(f"Ошибка проверки здоровья: {e}")
 				return {"status": "unhealthy", "onec_connection": "error", "error_details": str(e)}
-		
-		@self.app.get("/sse")
-		async def handle_sse(request: Request):
-			"""Обработка SSE подключений."""
-			client_id = request.headers.get("x-client-id", "default")
-			
-			logger.info(f"Новое SSE подключение: {client_id}")
-			
-			# Создаем SSE транспорт
-			sse_transport = SseServerTransport("/messages")
-			self.sse_transports[client_id] = sse_transport
-			
-			async def event_stream():
-				try:
-					async with sse_transport.connect_sse(
-						request.scope, 
-						request.receive, 
-						None  # send будет установлен через StreamingResponse
-					) as streams:
-						# Запускаем MCP сервер с SSE транспортом
-						await self.mcp_proxy.server.run(
-							streams[0], 
-							streams[1], 
-							self.mcp_proxy.get_initialization_options()
-						)
-				except Exception as e:
-					logger.error(f"Ошибка в SSE потоке для клиента {client_id}: {e}")
-				finally:
-					# Удаляем транспорт при отключении
-					if client_id in self.sse_transports:
-						del self.sse_transports[client_id]
-					logger.info(f"SSE подключение закрыто: {client_id}")
-			
-			return StreamingResponse(
-				event_stream(),
-				media_type="text/event-stream",
-				headers={
-					"Cache-Control": "no-cache",
-					"Connection": "keep-alive",
-					"Access-Control-Allow-Origin": "*",
-					"Access-Control-Allow-Headers": "*",
-				}
-			)
-		
-		@self.app.post("/messages")
-		async def handle_messages(request: Request):
-			"""Обработка POST сообщений от клиентов."""
-			client_id = request.headers.get("x-client-id", "default")
-			
-			if client_id not in self.sse_transports:
-				raise HTTPException(
-					status_code=404, 
-					detail=f"SSE транспорт для клиента {client_id} не найден"
-				)
-			
-			try:
-				# Получаем JSON данные
-				logger.debug(f"Получено сообщение от клиента {client_id}")
-				
-				# Передаем сообщение в SSE транспорт
-				sse_transport = self.sse_transports[client_id]
-				await sse_transport.handle_post_message(
-					request.scope,
-					request.receive,
-					None  # send не используется для POST
-				)
-				
-				return {"status": "ok"}
-				
-			except json.JSONDecodeError as e:
-				logger.error(f"Ошибка парсинга JSON от клиента {client_id}: {e}")
-				raise HTTPException(status_code=400, detail="Неверный JSON")
-			except Exception as e:
-				logger.error(f"Ошибка обработки сообщения от клиента {client_id}: {e}")
-				raise HTTPException(status_code=500, detail=str(e))
 	
 	async def start(self):
 		"""Запуск HTTP-сервера."""
