@@ -38,14 +38,15 @@ def create_parser() -> argparse.ArgumentParser:
 		epilog="""
 Примеры использования:
 
-  # Запуск в режиме stdio (для использования с MCP клиентами)
+  # Запуск в режиме stdio (по умолчанию)
+  python -m src.py_server
   python -m src.py_server stdio
 
   # Запуск HTTP-сервера на порту 8000
   python -m src.py_server http --port 8000
 
   # Запуск с конфигурацией из .env файла
-  python -m src.py_server http --env-file .env
+  python -m src.py_server --env-file .env
 
 Переменные окружения:
   MCP_ONEC_URL           - URL базы 1С (обязательно)
@@ -58,64 +59,59 @@ def create_parser() -> argparse.ArgumentParser:
 		"""
 	)
 	
-	# Подкоманды
-	subparsers = parser.add_subparsers(dest="mode", help="Режим работы сервера")
-	
-	# Stdio режим
-	stdio_parser = subparsers.add_parser(
-		"stdio", 
-		help="Запуск в режиме stdio (для MCP клиентов)"
+	# Режим работы как позиционный аргумент с значением по умолчанию
+	parser.add_argument(
+		"mode",
+		nargs="?",
+		default="stdio",
+		choices=["stdio", "http"],
+		help="Режим работы сервера (по умолчанию: stdio)"
 	)
 	
-	# HTTP режим
-	http_parser = subparsers.add_parser(
-		"http", 
-		help="Запуск HTTP-сервера с поддержкой SSE"
+	# Общие аргументы доступны всегда
+	parser.add_argument(
+		"--env-file",
+		type=str,
+		help="Путь к .env файлу с конфигурацией"
 	)
-	http_parser.add_argument(
+	parser.add_argument(
+		"--onec-url",
+		type=str,
+		help="URL базы 1С"
+	)
+	parser.add_argument(
+		"--onec-username",
+		type=str,
+		help="Имя пользователя 1С"
+	)
+	parser.add_argument(
+		"--onec-password",
+		type=str,
+		help="Пароль пользователя 1С"
+	)
+	parser.add_argument(
+		"--onec-service-root",
+		type=str,
+		help="Корневой URL HTTP-сервиса в 1С"
+	)
+	parser.add_argument(
+		"--log-level",
+		type=str,
+		choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+		help="Уровень логирования"
+	)
+	
+	# HTTP-специфичные аргументы
+	parser.add_argument(
 		"--host", 
 		type=str, 
-		help="Хост для HTTP-сервера"
+		help="Хост для HTTP-сервера (только для режима http)"
 	)
-	http_parser.add_argument(
+	parser.add_argument(
 		"--port", 
 		type=int, 
-		help="Порт для HTTP-сервера"
+		help="Порт для HTTP-сервера (только для режима http)"
 	)
-	
-	# Общие параметры
-	for subparser in [stdio_parser, http_parser]:
-		subparser.add_argument(
-			"--env-file",
-			type=str,
-			help="Путь к .env файлу с конфигурацией"
-		)
-		subparser.add_argument(
-			"--onec-url",
-			type=str,
-			help="URL базы 1С"
-		)
-		subparser.add_argument(
-			"--onec-username",
-			type=str,
-			help="Имя пользователя 1С"
-		)
-		subparser.add_argument(
-			"--onec-password",
-			type=str,
-			help="Пароль пользователя 1С"
-		)
-		subparser.add_argument(
-			"--onec-service-root",
-			type=str,
-			help="Корневой URL HTTP-сервиса в 1С"
-		)
-		subparser.add_argument(
-			"--log-level",
-			type=str,
-			choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-			help="Уровень логирования"
-		)
 	
 	return parser
 
@@ -125,12 +121,10 @@ async def main():
 	parser = create_parser()
 	args = parser.parse_args()
 	
-	if not args.mode:
-		parser.print_help()
-		sys.exit(1)
+	# Режим теперь всегда установлен благодаря default="stdio"
 	
 	# Загружаем .env файл если указан
-	if hasattr(args, 'env_file') and args.env_file:
+	if args.env_file:
 		env_path = Path(args.env_file)
 		if env_path.exists():
 			load_dotenv(env_path)
@@ -149,9 +143,9 @@ async def main():
 		os.environ["MCP_ONEC_PASSWORD"] = args.onec_password
 	if args.onec_service_root:
 		os.environ["MCP_ONEC_SERVICE_ROOT"] = args.onec_service_root
-	if hasattr(args, 'host') and args.host:
+	if args.host:
 		os.environ["MCP_HOST"] = args.host
-	if hasattr(args, 'port') and args.port:
+	if args.port:
 		os.environ["MCP_PORT"] = str(args.port)
 	if args.log_level:
 		os.environ["MCP_LOG_LEVEL"] = args.log_level
