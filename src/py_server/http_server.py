@@ -102,22 +102,36 @@ class MCPHttpServer:
 	def _mount_sse_app(self):
 		"""Монтирование Starlette приложения для SSE."""
 		sse_app = self._create_sse_starlette_app()
-		self.app.mount("/", sse_app)
+		# Монтируем SSE приложение НЕ на корневой путь, чтобы не конфликтовало с FastAPI маршрутами
+		self.app.mount("/mcp", sse_app)
 	
 	def _register_routes(self):
 		"""Регистрация основных маршрутов."""
 		
-		@self.app.get("/info")
+		@self.app.get("/")
 		async def root():
+			"""Корневой маршрут - перенаправляет на info."""
+			return {
+				"message": "1C MCP Proxy Server",
+				"endpoints": {
+					"info": "/info",
+					"health": "/health",
+					"sse": "/mcp/sse"
+				}
+			}
+		
+		@self.app.get("/info")
+		async def info():
 			"""Информационный маршрут (не конфликтует с SSE)."""
 			return {
 				"name": self.config.server_name,
 				"version": self.config.server_version,
 				"description": "MCP-прокси для взаимодействия с 1С",
 				"endpoints": {
-					"sse": "/sse",
-					"messages": "/messages/",
-					"health": "/health"
+					"sse": "/mcp/sse",
+					"messages": "/mcp/messages/",
+					"health": "/health",
+					"info": "/info"
 				}
 			}
 		
