@@ -25,7 +25,7 @@ def setup_logging(level: str = "INFO"):
 		level=getattr(logging, level.upper()),
 		format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 		handlers=[
-			logging.StreamHandler(sys.stdout)
+			logging.StreamHandler(sys.stderr)  # Логи должны идти в stderr, не в stdout!
 		]
 	)
 
@@ -118,10 +118,32 @@ def create_parser() -> argparse.ArgumentParser:
 
 async def main():
 	"""Основная функция."""
+	# Принудительная настройка кодировки UTF-8 для Windows
+	if sys.platform == "win32":
+		import locale
+		import os
+		
+		# Устанавливаем кодировку для Python I/O
+		os.environ['PYTHONIOENCODING'] = 'utf-8'
+		
+		# Устанавливаем локаль
+		try:
+			locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
+		except:
+			try:
+				locale.setlocale(locale.LC_ALL, 'Russian_Russia.1251')
+			except:
+				pass  # Игнорируем ошибки локали
+	
+	# Убеждаемся, что stderr работает без буферизации
+	sys.stderr.flush()
+	
 	parser = create_parser()
 	args = parser.parse_args()
 	
-	# Режим теперь всегда установлен благодаря default="stdio"
+	# Отладочная информация для диагностики
+	print(f"DEBUG: Режим работы: {args.mode}", file=sys.stderr)
+	print(f"DEBUG: Аргументы: {args}", file=sys.stderr)
 	
 	# Загружаем .env файл если указан
 	if args.env_file:
@@ -129,7 +151,7 @@ async def main():
 		if env_path.exists():
 			load_dotenv(env_path)
 		else:
-			print(f"Предупреждение: файл {args.env_file} не найден")
+			print(f"Предупреждение: файл {args.env_file} не найден", file=sys.stderr)
 	else:
 		# Пытаемся загрузить .env из текущей директории
 		load_dotenv()
@@ -158,11 +180,11 @@ async def main():
 		# Все значения уже установлены через переменные окружения
 			
 	except Exception as e:
-		print(f"Ошибка конфигурации: {e}")
-		print("\nПроверьте, что указаны все обязательные параметры:")
-		print("- MCP_ONEC_URL (URL базы 1С)")
-		print("- MCP_ONEC_USERNAME (имя пользователя)")
-		print("- MCP_ONEC_PASSWORD (пароль)")
+		print(f"Ошибка конфигурации: {e}", file=sys.stderr)
+		print("\nПроверьте, что указаны все обязательные параметры:", file=sys.stderr)
+		print("- MCP_ONEC_URL (URL базы 1С)", file=sys.stderr)
+		print("- MCP_ONEC_USERNAME (имя пользователя)", file=sys.stderr)
+		print("- MCP_ONEC_PASSWORD (пароль)", file=sys.stderr)
 		sys.exit(1)
 	
 	# Настройка логирования

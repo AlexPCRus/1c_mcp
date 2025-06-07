@@ -2,7 +2,7 @@
     "mcpServers": {
       "1c-server-stdio": {
         "command": "d:/rep/1c_mcp/venv/Scripts/python.exe",
-        "args": ["-m", "src.py_server", "stdio"],
+        "args": ["-m", "src.py_server"],
         "cwd": "D:/rep/1c_mcp",
         "env": {
           "PYTHONPATH":"D:/rep/1c_mcp",
