@@ -32,7 +32,7 @@ MCP Client <-> MCP Proxy (Python) <-> 1C HTTP Service
 pip install -r requirements.txt
 ```
 
-2. Скопируйте файл конфигурации:
+2. Конфигурация сервера (в отдельном файле .env для случая запуска в HTTP-режиме с SSE):
 ```bash
 cp env.example .env
 ```
@@ -51,7 +51,7 @@ MCP_ONEC_PASSWORD=your_password
 Для использования с MCP-клиентами типа Claude Desktop:
 
 ```bash
-python -m src.py_server stdio
+python -m src.py_server
 ```
 
 ### Режим HTTP-сервера (для веб-клиентов)
@@ -115,22 +115,6 @@ python -m src.py_server stdio \
 
 По умолчанию корневой URL HTTP-сервиса - `mcp`, но его можно изменить через параметр `MCP_ONEC_SERVICE_ROOT`.
 
-Примеры URL:
-- Манифест: `http://localhost/base/hs/mcp/manifest`
-- RPC: `http://localhost/base/hs/mcp/rpc`
-
-### GET /hs/{service_root}/manifest
-Возвращает манифест MCP-сервера с информацией о capabilities:
-```json
-{
-  "capabilities": {
-    "tools": {"listChanged": true},
-    "resources": {"subscribe": true, "listChanged": true},
-    "prompts": {"listChanged": true}
-  }
-}
-```
-
 ### POST /hs/{service_root}/rpc
 Обрабатывает JSON-RPC запросы для всех MCP-операций:
 - `tools/list` - список инструментов
@@ -150,88 +134,11 @@ python -m src.py_server stdio \
 }
 ```
 
-Примеры ответов с разными типами ресурсов:
-
-**Текстовый ресурс:**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "contents": [
-      {
-        "type": "text",
-        "text": "Содержимое текстового файла",
-        "mimeType": "text/plain"
-      }
-    ]
-  }
-}
-```
-
-**Бинарный ресурс (изображение, документ):**
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "contents": [
-      {
-        "type": "blob",
-        "blob": "iVBORw0KGgoAAAANSUhEUgAA...",
-        "mimeType": "image/png"
-      }
-    ]
-  }
-}
-```
-
-## Примеры использования
-
-### С Claude Desktop
-
-Добавьте в конфигурацию Claude Desktop (`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "1c-proxy": {
-      "command": "python",
-      "args": ["-m", "src.py_server", "stdio"],
-      "env": {
-        "MCP_ONEC_URL": "http://localhost/your_base",
-        "MCP_ONEC_USERNAME": "username",
-        "MCP_ONEC_PASSWORD": "password",
-        "MCP_ONEC_SERVICE_ROOT": "mcp"
-      }
-    }
-  }
-}
-```
-
-### С веб-приложением
-
-```javascript
-// Подключение к HTTP-серверу
-const eventSource = new EventSource('http://localhost:8000/sse');
-
-// Отправка сообщений
-fetch('http://localhost:8000/messages', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/list'
-  })
-});
-```
-
 ## Отладка
 
 Включите подробное логирование:
 ```bash
-python -m src.py_server stdio --log-level DEBUG
+python -m src.py_server --log-level DEBUG
 ```
 
 Проверьте состояние HTTP-сервера:
@@ -241,7 +148,7 @@ curl http://localhost:8000/health
 
 ## Требования к 1С
 
-- 1С:Предприятие 8.3.24+
+- 1С:Предприятие 8.3.20+
 - Расширение MCP-сервер (см. `../1c_ext/`)
 - HTTP-сервис должен быть опубликован и доступен
 
