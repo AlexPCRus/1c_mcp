@@ -56,9 +56,9 @@ source venv/bin/activate
 pip install -r src/py_server/requirements.txt
 ```
 
-### 3. Настройка
+### 3. Настройка (при запуске в режиме HTTP с SSE)
 
-Создайте файл `.env` в корне проекта (при запуске в режиме HTTP с SSE):
+Создайте файл `.env` в корне проекта:
 
 ```bash
 # Скопируйте пример настроек (Windows)
