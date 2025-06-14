@@ -141,10 +141,6 @@ async def main():
 	parser = create_parser()
 	args = parser.parse_args()
 	
-	# Отладочная информация для диагностики
-	print(f"DEBUG: Режим работы: {args.mode}", file=sys.stderr)
-	print(f"DEBUG: Аргументы: {args}", file=sys.stderr)
-	
 	# Загружаем .env файл если указан
 	if args.env_file:
 		env_path = Path(args.env_file)
@@ -191,22 +187,28 @@ async def main():
 	setup_logging(config.log_level)
 	logger = logging.getLogger(__name__)
 	
-	logger.info(f"Запуск MCP-прокси сервера в режиме: {args.mode}")
-	logger.info(f"Подключение к 1С: {config.onec_url}")
-	logger.info(f"Пользователь: {config.onec_username}")
+	# Отладочная информация через logger (подчиняется уровню логирования)
+	logger.debug(f"Режим работы: {args.mode}")
+	logger.debug(f"Аргументы: {args}")
+	logger.debug(f"Python версия: {sys.version}")
+	logger.debug(f"Рабочая директория: {os.getcwd()}")
+	
+	logger.debug(f"Запуск MCP-прокси сервера в режиме: {args.mode}")
+	logger.debug(f"Подключение к 1С: {config.onec_url}")
+	logger.debug(f"Пользователь: {config.onec_username}")
 	
 	try:
 		if args.mode == "stdio":
 			await run_stdio_server(config)
 		elif args.mode == "http":
-			logger.info(f"HTTP-сервер будет запущен на {config.host}:{config.port}")
+			logger.debug(f"HTTP-сервер будет запущен на {config.host}:{config.port}")
 			await run_http_server(config)
 		else:
 			logger.error(f"Неизвестный режим: {args.mode}")
 			sys.exit(1)
 			
 	except KeyboardInterrupt:
-		logger.info("Получен сигнал прерывания, завершение работы...")
+		logger.debug("Получен сигнал прерывания, завершение работы...")
 	except Exception as e:
 		logger.error(f"Критическая ошибка: {e}")
 		sys.exit(1)

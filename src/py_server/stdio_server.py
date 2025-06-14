@@ -17,7 +17,7 @@ async def run_stdio_server(config: Config):
 	Args:
 		config: Конфигурация сервера
 	"""
-	logger.info("Запуск MCP сервера в режиме stdio")
+	logger.debug("Запуск MCP сервера в режиме stdio")
 	
 	# Создаем прокси
 	mcp_proxy = MCPProxy(config)

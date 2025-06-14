@@ -59,9 +59,9 @@ class MCPHttpServer:
 	@asynccontextmanager
 	async def _lifespan(self, app: FastAPI):
 		"""Управление жизненным циклом приложения."""
-		logger.info("Запуск HTTP-сервера MCP")
+		logger.debug("Запуск HTTP-сервера MCP")
 		yield
-		logger.info("Остановка HTTP-сервера MCP")
+		logger.debug("Остановка HTTP-сервера MCP")
 	
 	def _create_sse_starlette_app(self) -> Starlette:
 		"""Создание Starlette приложения для обработки SSE."""
@@ -70,7 +70,7 @@ class MCPHttpServer:
 		
 		async def handle_sse(request):
 			"""Обработчик SSE подключений."""
-			logger.info("Новое SSE подключение")
+			logger.debug("Новое SSE подключение")
 			
 			try:
 				# Подключаем SSE с использованием транспорта
@@ -89,7 +89,7 @@ class MCPHttpServer:
 				logger.error(f"Ошибка в SSE обработчике: {e}")
 				raise
 			finally:
-				logger.info("SSE подключение закрыто")
+				logger.debug("SSE подключение закрыто")
 		
 		# Создаем маршруты для Starlette приложения
 		routes = [
@@ -160,7 +160,7 @@ class MCPHttpServer:
 		)
 		
 		server = uvicorn.Server(config)
-		logger.info(f"Запуск HTTP-сервера на {self.config.host}:{self.config.port}")
+		logger.debug(f"Запуск HTTP-сервера на {self.config.host}:{self.config.port}")
 		await server.serve()
 
 

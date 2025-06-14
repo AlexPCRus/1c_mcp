@@ -41,6 +41,8 @@ class MCPProxy:
 	@asynccontextmanager
 	async def _lifespan(self, server: Server) -> AsyncIterator[Dict[str, Any]]:
 		"""Управление жизненным циклом сервера."""
+		logger.debug(f"Инициализация MCP сервера '{self.config.server_name}' v{self.config.server_version}")
+		
 		# Инициализация при запуске
 		self.onec_client = OneCClient(
 			base_url=self.config.onec_url,
@@ -49,20 +51,21 @@ class MCPProxy:
 			service_root=self.config.onec_service_root
 		)
 		
-		logger.info(f"Подключение к 1С: {self.config.onec_url}")
-		logger.info(f"HTTP-сервис: {self.config.onec_service_root}")
+		logger.debug(f"Подключение к 1С: {self.config.onec_url}")
+		logger.debug(f"HTTP-сервис: {self.config.onec_service_root}")
 		
 		try:
 			# Проверяем подключение к 1С
 			await self.onec_client.check_health()
-			logger.info("Успешное подключение к 1С (проверка health)")
+			logger.debug("Успешное подключение к 1С (проверка health)")
 			
+			logger.debug("MCP сервер готов к работе")
 			yield {"onec_client": self.onec_client}
 		finally:
 			# Очистка при завершении
 			if self.onec_client:
 				await self.onec_client.close()
-				logger.info("Соединение с 1С закрыто")
+				logger.debug("Соединение с 1С закрыто")
 	
 	def _register_handlers(self):
 		"""Регистрация обработчиков MCP."""
@@ -88,7 +91,7 @@ class MCPProxy:
 			onec_client: OneCClient = ctx.lifespan_context["onec_client"]
 			
 			try:
-				logger.info(f"Вызов инструмента: {name} с аргументами: {arguments}")
+				logger.debug(f"Вызов инструмента: {name} с аргументами: {arguments}")
 				result = await onec_client.call_tool(name, arguments)
 				
 				if result.isError:
@@ -123,7 +126,7 @@ class MCPProxy:
 			onec_client: OneCClient = ctx.lifespan_context["onec_client"]
 			
 			try:
-				logger.info(f"Чтение ресурса: {uri}")
+				logger.debug(f"Чтение ресурса: {uri}")
 				result = await onec_client.read_resource(uri)
 				return result
 			except Exception as e:
@@ -160,7 +163,7 @@ class MCPProxy:
 			onec_client: OneCClient = ctx.lifespan_context["onec_client"]
 			
 			try:
-				logger.info(f"Получение промпта: {name} с аргументами: {arguments}")
+				logger.debug(f"Получение промпта: {name} с аргументами: {arguments}")
 				result = await onec_client.get_prompt(name, arguments)
 				return result
 			except Exception as e:
@@ -173,9 +176,16 @@ class MCPProxy:
 	def get_capabilities(self) -> Dict[str, Any]:
 		"""Получить capabilities сервера."""
 		return {
-			"tools": {"listChanged": True},
-			"resources": {"subscribe": True, "listChanged": True},
-			"prompts": {"listChanged": True},
+			"tools": {
+				"listChanged": True
+			},
+			"resources": {
+				"subscribe": True,
+				"listChanged": True
+			},
+			"prompts": {
+				"listChanged": True
+			},
 			"logging": {}
 		}
 	
@@ -185,7 +195,11 @@ class MCPProxy:
 			server_name=self.config.server_name,
 			server_version=self.config.server_version,
 			capabilities=self.server.get_capabilities(
-				notification_options=NotificationOptions(),
+				notification_options=NotificationOptions(
+					tools_changed=True,
+					resources_changed=True,
+					prompts_changed=True
+				),
 				experimental_capabilities={}
 			)
 		) 

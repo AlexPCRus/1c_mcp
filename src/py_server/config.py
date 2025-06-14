@@ -20,7 +20,7 @@ class Config(BaseSettings):
 	onec_service_root: str = Field(default="mcp", description="Корневой URL HTTP-сервиса в 1С")
 	
 	# Настройки MCP
-	server_name: str = Field(default="1C-MCP-Proxy", description="Имя MCP-сервера")
+	server_name: str = Field(default="1C Configuration Data Tools", description="Имя MCP-сервера")
 	server_version: str = Field(default="1.0.0", description="Версия MCP-сервера")
 	
 	# Настройки логирования
