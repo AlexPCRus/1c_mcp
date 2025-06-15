@@ -6,7 +6,8 @@
         "cwd": "D:/rep/1c_mcp",
         "env": {
           "PYTHONPATH":"D:/rep/1c_mcp",
-  
+          "PYTHONIOENCODING":"utf-8",
+
           "MCP_ONEC_URL":"http://localhost/cg",
           "MCP_ONEC_USERNAME":"Администратор",
           "MCP_ONEC_PASSWORD":"",
