@@ -41,7 +41,7 @@ AI-клиент ←→ MCP-прокси (Python) ←→ HTTP-сервис 1С
 
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-repo/1c_mcp.git
+git clone https://github.com/vladimir-kharin/1c_mcp.git
 cd 1c_mcp
 
 # Создание виртуального окружения
