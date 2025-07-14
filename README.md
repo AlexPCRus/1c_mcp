@@ -34,6 +34,7 @@ AI-клиент ←→ MCP-прокси (Python) ←→ HTTP-сервис 1С
 - Python 3.11+
 - 1С:Предприятие 8.3.20+
 - Возможность публикации HTTP-сервисов из базы
+- Rust toolchain (может потребоваться для компиляции Python-зависимостей)
 
 ### 2. Установка Python-прокси
 
@@ -55,6 +56,24 @@ source venv/bin/activate
 # Установка зависимостей
 pip install -r src/py_server/requirements.txt
 ```
+
+#### Разрешение ошибок установки зависимостей
+
+Если у вас Python новых версий и установка зависимостей происходит с ошибкой, то возможно вам нужно установить Rust.
+
+Python-зависимости проекта требуют Rust для компиляции. **Выберите любой удобный способ:**
+
+**Способ 1: WinGet (рекомендуется)**
+```cmd
+winget install Rustlang.Rustup
+```
+
+**Способ 2: Официальный установщик**
+1. Перейдите на https://rustup.rs/
+2. Нажмите "Download rustup-init.exe"
+3. Запустите файл и следуйте инструкциям
+
+> **Примечание:** После установки любым способом перезапустите терминал или IDE для обновления PATH.
 
 ### 3. Настройка
 
@@ -97,6 +116,61 @@ python -m src.py_server http --port 8000
 - **Cursor** - см. `mcp_client_settings/cursor/`
 
 Каждый клиент имеет свои особенности подключения и конфигурации.
+
+## Решение проблем (Troubleshooting)
+
+### Ошибки при установке зависимостей
+
+**Проблема:** Ошибки типа "Rust not found" или "metadata-generation-failed"
+```
+Cargo, the Rust package manager, is not installed or is not on PATH.
+```
+
+**Решение:** Установите Rust любым из простых способов:
+- **WinGet**: `winget install Rustlang.Rustup`
+- **Сайт**: Скачайте с https://rustup.rs/
+
+После установки перезапустите терминал/IDE.
+
+**Проблема:** Конфликты версий пакетов
+```
+ERROR: Cannot install ... because these package versions have conflicting dependencies.
+```
+
+**Решение:** Обновите pip и попробуйте установку заново:
+```bash
+python -m pip install --upgrade pip
+pip install -r src/py_server/requirements.txt
+```
+
+**Проблема:** Долгая установка или зависание
+```
+INFO: This is taking longer than usual...
+```
+
+**Решение:** Попробуйте установить с использованием только готовых binary wheels:
+```bash
+pip install --only-binary=all -r src/py_server/requirements.txt
+```
+
+### Проблемы запуска
+
+**Проблема:** Ошибки импорта модулей
+```
+ModuleNotFoundError: No module named 'src'
+```
+
+**Решение:** Убедитесь, что запускаете команды из корневой папки проекта и виртуальное окружение активировано.
+
+**Проблема:** Ошибки подключения к 1С
+```
+Connection refused или HTTP 401/403
+```
+
+**Решение:** 
+1. Проверьте правильность настроек в `.env` файле
+2. Убедитесь, что HTTP-сервисы опубликованы в базе 1С
+3. Проверьте доступность базы по указанному URL
 
 ## Реализация MCP-сервера в 1С
 
