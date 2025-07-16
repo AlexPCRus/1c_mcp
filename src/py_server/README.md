@@ -65,8 +65,9 @@ python -m src.py_server http --port 8000
 HTTP-сервер предоставляет следующие endpoints:
 - `GET /` - информация о сервере
 - `GET /health` - проверка состояния
-- `GET /sse` - SSE подключение для MCP
-- `POST /messages` - отправка сообщений MCP
+- `GET /mcp/sse` - SSE подключение для MCP
+- `POST /mcp/messages` - отправка сообщений MCP
+- `GET /info` - информация о сервере
 
 ### Параметры командной строки
 
