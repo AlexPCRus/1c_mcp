@@ -18,8 +18,11 @@
           "MCP_SERVER_VERSION":"1.0.0"
         }
       },
-      "1c-server-sse": {
-        "url": "http://127.0.0.1:8000/mcp/sse"
+      "1c-server-http": {
+        "url": "http://127.0.0.1:8000/mcp"
+      },
+      "1c-server-http-sse": {
+        "url": "http://127.0.0.1:8000/sse"
       }
     }
   }

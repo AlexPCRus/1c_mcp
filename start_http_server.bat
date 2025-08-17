@@ -35,7 +35,8 @@ echo 📡 Сервер будет доступен на http://127.0.0.1:8000
 echo    🏠 Главная страница: http://127.0.0.1:8000/
 echo    ❤️  Health check: http://127.0.0.1:8000/health
 echo    ℹ️  Server info: http://127.0.0.1:8000/info
-echo    🔌 SSE для MCP: http://127.0.0.1:8000/mcp/sse
+echo    🔌 SSE для MCP: http://127.0.0.1:8000/sse
+echo    🚀 Streamable HTTP для MCP: http://127.0.0.1:8000/mcp
 echo.
 
 REM Запуск сервера
