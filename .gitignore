@@ -11,6 +11,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+.cursor/
 build/
 develop-eggs/
 dist/
