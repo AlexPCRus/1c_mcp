@@ -16,6 +16,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.models import InitializationOptions
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
+from starlette.types import Scope, Receive, Send
 
 from .mcp_server import MCPProxy
 from .config import Config
@@ -111,39 +112,23 @@ class MCPHttpServer:
 		
 		return Starlette(routes=routes)
 	
-	def _create_streamable_http_starlette_app(self) -> Starlette:
-		"""Создание Starlette приложения для обработки Streamable HTTP."""
+	def _create_streamable_http_asgi(self):
+		"""Создание ASGI обработчика для Streamable HTTP."""
 		
-		async def handle_streamable_http(request):
-			"""Обработчик Streamable HTTP соединений."""
+		async def asgi(scope: Scope, receive: Receive, send: Send) -> None:
+			"""ASGI обработчик для Streamable HTTP соединений."""
 			logger.debug("Новое Streamable HTTP подключение")
 			
 			try:
-				# Используем StreamableHTTPSessionManager для подключения
-				async with self.streamable_session_manager.connect(
-					request.scope,
-					request.receive, 
-					request._send
-				) as (read_stream, write_stream):
-					# Запускаем MCP сервер с потоками
-					await self.mcp_proxy.server.run(
-						read_stream,
-						write_stream,
-						self.mcp_proxy.get_initialization_options()
-					)
-					
+				# Используем правильный API handle_request для ASGI
+				await self.streamable_session_manager.handle_request(scope, receive, send)
 			except Exception as e:
 				logger.error(f"Ошибка в Streamable HTTP обработчике: {e}")
 				raise
 			finally:
 				logger.debug("Streamable HTTP подключение закрыто")
 		
-		# Создаем маршруты для Starlette приложения
-		routes = [
-			Route("/", endpoint=handle_streamable_http, methods=["GET", "POST"]),
-		]
-		
-		return Starlette(routes=routes)
+		return asgi
 	
 	def _mount_transports(self):
 		"""Монтирование транспортов MCP."""
@@ -152,9 +137,9 @@ class MCPHttpServer:
 		sse_app = self._create_sse_starlette_app()
 		self.app.mount("/sse", sse_app)
 		
-		# Монтируем Streamable HTTP транспорт на /mcp  
-		streamable_app = self._create_streamable_http_starlette_app()
-		self.app.mount("/mcp", streamable_app)
+		# Монтируем Streamable HTTP транспорт на /mcp/ (с trailing slash для устранения 307 редиректов)
+		streamable_app = self._create_streamable_http_asgi()
+		self.app.mount("/mcp/", streamable_app)
 	
 	def _register_routes(self):
 		"""Регистрация основных маршрутов."""
@@ -168,7 +153,7 @@ class MCPHttpServer:
 					"info": "/info",
 					"health": "/health",
 					"sse": "/sse",
-					"streamable_http": "/mcp"
+					"streamable_http": "/mcp/"
 				}
 			}
 		
@@ -182,7 +167,7 @@ class MCPHttpServer:
 				"endpoints": {
 					"sse": "/sse",
 					"messages": "/sse/messages/",
-					"streamable_http": "/mcp",
+					"streamable_http": "/mcp/",
 					"health": "/health",
 					"info": "/info"
 				},
@@ -192,7 +177,7 @@ class MCPHttpServer:
 						"messages": "/sse/messages/"
 					},
 					"streamable_http": {
-						"endpoint": "/mcp"
+						"endpoint": "/mcp/"
 					}
 				}
 			}
