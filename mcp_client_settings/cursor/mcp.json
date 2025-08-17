@@ -19,10 +19,17 @@
         }
       },
       "1c-server-http": {
-        "url": "http://127.0.0.1:8000/mcp"
+        "url": "http://127.0.0.1:8000/mcp/"
       },
       "1c-server-http-sse": {
         "url": "http://127.0.0.1:8000/sse"
-      }
+      },
+      "1c-server-direct": {
+        "url": "http://localhost/your_base_name/hs/mcp/mcp",
+        "auth": {
+          "username": "your_username", 
+          "password": "your_password"
+        }
+      },
     }
   }
