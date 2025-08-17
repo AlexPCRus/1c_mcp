@@ -1,4 +1,4 @@
-"""HTTP-сервер с поддержкой SSE для MCP."""
+"""HTTP-сервер с поддержкой SSE и Streamable HTTP для MCP."""
 
 import asyncio
 import json
@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.models import InitializationOptions
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class MCPHttpServer:
-	"""HTTP-сервер для MCP с поддержкой SSE."""
+	"""HTTP-сервер для MCP с поддержкой SSE и Streamable HTTP."""
 	
 	def __init__(self, config: Config):
 		"""Инициализация HTTP-сервера.
@@ -34,6 +35,10 @@ class MCPHttpServer:
 		"""
 		self.config = config
 		self.mcp_proxy = MCPProxy(config)
+		
+		# Создаем session manager для Streamable HTTP после создания MCP прокси
+		self.streamable_session_manager = StreamableHTTPSessionManager(self.mcp_proxy.server)
+		
 		self.app = FastAPI(
 			title="1C MCP Proxy",
 			description="MCP-прокси для взаимодействия с 1С",
@@ -50,8 +55,8 @@ class MCPHttpServer:
 			allow_headers=["*"],
 		)
 		
-		# Создаем и монтируем Starlette приложение для SSE
-		self._mount_sse_app()
+		# Монтируем транспорты
+		self._mount_transports()
 		
 		# Регистрация основных маршрутов
 		self._register_routes()
@@ -60,7 +65,11 @@ class MCPHttpServer:
 	async def _lifespan(self, app: FastAPI):
 		"""Управление жизненным циклом приложения."""
 		logger.debug("Запуск HTTP-сервера MCP")
-		yield
+		
+		# Запускаем session manager для Streamable HTTP
+		async with self.streamable_session_manager.run():
+			yield
+		
 		logger.debug("Остановка HTTP-сервера MCP")
 	
 	def _create_sse_starlette_app(self) -> Starlette:
@@ -92,18 +101,60 @@ class MCPHttpServer:
 				logger.debug("SSE подключение закрыто")
 		
 		# Создаем маршруты для Starlette приложения
+		# Когда это приложение монтируется на /sse:
+		# - Route("/", ...) становится GET /sse (SSE подключение)
+		# - Mount("/messages/", ...) становится POST /sse/messages/ (отправка сообщений)
 		routes = [
-			Route("/sse", endpoint=handle_sse),
-			Mount("/messages/", app=sse_transport.handle_post_message),
+			Route("/", endpoint=handle_sse),  # SSE endpoint: GET /sse
+			Mount("/messages/", app=sse_transport.handle_post_message),  # Messages: POST /sse/messages/
 		]
 		
 		return Starlette(routes=routes)
 	
-	def _mount_sse_app(self):
-		"""Монтирование Starlette приложения для SSE."""
+	def _create_streamable_http_starlette_app(self) -> Starlette:
+		"""Создание Starlette приложения для обработки Streamable HTTP."""
+		
+		async def handle_streamable_http(request):
+			"""Обработчик Streamable HTTP соединений."""
+			logger.debug("Новое Streamable HTTP подключение")
+			
+			try:
+				# Используем StreamableHTTPSessionManager для подключения
+				async with self.streamable_session_manager.connect(
+					request.scope,
+					request.receive, 
+					request._send
+				) as (read_stream, write_stream):
+					# Запускаем MCP сервер с потоками
+					await self.mcp_proxy.server.run(
+						read_stream,
+						write_stream,
+						self.mcp_proxy.get_initialization_options()
+					)
+					
+			except Exception as e:
+				logger.error(f"Ошибка в Streamable HTTP обработчике: {e}")
+				raise
+			finally:
+				logger.debug("Streamable HTTP подключение закрыто")
+		
+		# Создаем маршруты для Starlette приложения
+		routes = [
+			Route("/", endpoint=handle_streamable_http, methods=["GET", "POST"]),
+		]
+		
+		return Starlette(routes=routes)
+	
+	def _mount_transports(self):
+		"""Монтирование транспортов MCP."""
+		
+		# Монтируем SSE транспорт на /sse
 		sse_app = self._create_sse_starlette_app()
-		# Монтируем SSE приложение НЕ на корневой путь, чтобы не конфликтовало с FastAPI маршрутами
-		self.app.mount("/mcp", sse_app)
+		self.app.mount("/sse", sse_app)
+		
+		# Монтируем Streamable HTTP транспорт на /mcp  
+		streamable_app = self._create_streamable_http_starlette_app()
+		self.app.mount("/mcp", streamable_app)
 	
 	def _register_routes(self):
 		"""Регистрация основных маршрутов."""
@@ -116,22 +167,33 @@ class MCPHttpServer:
 				"endpoints": {
 					"info": "/info",
 					"health": "/health",
-					"sse": "/mcp/sse"
+					"sse": "/sse",
+					"streamable_http": "/mcp"
 				}
 			}
 		
 		@self.app.get("/info")
 		async def info():
-			"""Информационный маршрут (не конфликтует с SSE)."""
+			"""Информационный маршрут."""
 			return {
 				"name": self.config.server_name,
 				"version": self.config.server_version,
 				"description": "MCP-прокси для взаимодействия с 1С",
 				"endpoints": {
-					"sse": "/mcp/sse",
-					"messages": "/mcp/messages/",
+					"sse": "/sse",
+					"messages": "/sse/messages/",
+					"streamable_http": "/mcp",
 					"health": "/health",
 					"info": "/info"
+				},
+				"transports": {
+					"sse": {
+						"endpoint": "/sse",
+						"messages": "/sse/messages/"
+					},
+					"streamable_http": {
+						"endpoint": "/mcp"
+					}
 				}
 			}
 		
