@@ -28,7 +28,7 @@
 			<Explanation/>
 		</Properties>
 		<ChildObjects>
-			<Template>СинтаксисВстроенногоЯзыка</Template>
+			<Template>syntax_1c</Template>
 		</ChildObjects>
 	</DataProcessor>
 </MetaDataObject>

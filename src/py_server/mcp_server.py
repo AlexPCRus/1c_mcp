@@ -135,7 +135,7 @@ class MCPProxy:
 				return types.ReadResourceResult(
 					contents=[
 						types.TextResourceContents(
-							uri=uri,
+							uri=str(uri),
 							mimeType="text/plain",
 							text=f"Ошибка чтения ресурса: {str(e)}"
 						)

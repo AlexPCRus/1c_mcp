@@ -5,6 +5,8 @@ import logging
 from typing import Any, Dict, List, Optional
 import httpx
 from mcp import types
+from mcp.server.lowlevel.helper_types import ReadResourceContents
+import base64
 
 
 logger = logging.getLogger(__name__)
@@ -196,60 +198,59 @@ class OneCClient:
 		
 		return resources
 	
-	async def read_resource(self, uri: str) -> types.ReadResourceResult:
+	async def read_resource(self, uri: str) -> List[ReadResourceContents]:
 		"""Прочитать ресурс.
 		
 		Args:
 			uri: URI ресурса
 			
 		Returns:
-			Содержимое ресурса
+			Список частей содержимого ресурса (текст/бинарные данные)
 		"""
-		result = await self.call_rpc("resources/read", {"uri": uri})
+		# MCP декоратор может передать сюда AnyUrl; приводим к строке перед JSON-RPC
+		uri_str = str(uri)
+		result = await self.call_rpc("resources/read", {"uri": uri_str})
 		
-		# Преобразуем результат в формат MCP
-		contents = []
+		# Преобразуем результат в Iterable[ReadResourceContents] для декоратора read_resource
+		contents: List[ReadResourceContents] = []
 		if "contents" in result:
 			for item in result["contents"]:
 				content_type = item.get("type")
-				
+				mime_type = item.get("mimeType")
 				if content_type == "text":
-					contents.append(types.TextResourceContents(
-						uri=uri,
-						mimeType=item.get("mimeType", "text/plain"),
-						text=item.get("text", "")
+					contents.append(ReadResourceContents(
+						content=item.get("text", ""),
+						mime_type=mime_type or "text/plain"
 					))
-				
 				elif content_type == "blob":
-					contents.append(types.BlobResourceContents(
-						uri=uri,
-						mimeType=item.get("mimeType", "application/octet-stream"),
-						blob=item.get("blob", "")
-					))
-				
-				else:
-					# Неизвестный тип - логируем предупреждение и обрабатываем как текст
-					logger.warning(f"Неизвестный тип ресурса: {content_type}, обрабатываем как текст")
-					
-					# Пытаемся извлечь текст разными способами
-					text_content = ""
-					if "text" in item:
-						text_content = str(item["text"])
-					elif "data" in item:
-						text_content = str(item["data"])
-					elif "content" in item:
-						text_content = str(item["content"])
+					blob_b64 = item.get("blob", "") or ""
+					try:
+						data_bytes = base64.b64decode(blob_b64)
+					except Exception:
+						# В случае некорректной base64 — вернем как текст для диагностики
+						contents.append(ReadResourceContents(
+							content=f"Invalid base64 blob: length={len(blob_b64)}",
+							mime_type="text/plain"
+						))
 					else:
-						# Если ничего подходящего нет, используем JSON представление
-						text_content = f"Неизвестный тип ресурса '{content_type}': {json.dumps(item, ensure_ascii=False)}"
-					
-					contents.append(types.TextResourceContents(
-						uri=uri,
-						mimeType=item.get("mimeType", "text/plain"),
-						text=text_content
+						contents.append(ReadResourceContents(
+							content=data_bytes,
+							mime_type=mime_type or "application/octet-stream"
+						))
+				else:
+					# Fallback: сериализуем как текст
+					contents.append(ReadResourceContents(
+						content=f"Unknown resource content type '{content_type}': {json.dumps(item, ensure_ascii=False)}",
+						mime_type="text/plain"
 					))
+		else:
+			# Если сервер вернул не ожидаемую структуру — вернем весь результат текстом
+			contents.append(ReadResourceContents(
+				content=json.dumps(result, ensure_ascii=False),
+				mime_type="application/json"
+			))
 		
-		return types.ReadResourceResult(contents=contents)
+		return contents
 	
 	async def list_prompts(self) -> List[types.Prompt]:
 		"""Получить список доступных промптов.
