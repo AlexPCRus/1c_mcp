@@ -62,8 +62,25 @@ class OAuth2BearerMiddleware(BaseHTTPMiddleware):
 		
 		token = auth_header[7:]  # Убираем "Bearer "
 		
-		# Валидируем токен
-		creds = self.oauth2_service.validate_access_token(token)
+		# Валидируем токен (поддерживаем два формата)
+		creds = None
+		
+		# 1. Простой формат: simple_base64(username:password)
+		if token.startswith("simple_"):
+			try:
+				import base64
+				creds_string = base64.b64decode(token[7:]).decode()
+				username, password = creds_string.split(":", 1)
+				creds = (username, password)
+				logger.debug(f"Простой токен валидирован для пользователя: {username}")
+			except Exception as e:
+				logger.warning(f"Ошибка декодирования простого токена: {e}")
+				creds = None
+		
+		# 2. OAuth2 формат: через хранилище
+		if not creds:
+			creds = self.oauth2_service.validate_access_token(token)
+		
 		if not creds:
 			return JSONResponse(
 				status_code=401,
@@ -231,14 +248,16 @@ class MCPHttpServer:
 		async def root():
 			"""Корневой маршрут - перенаправляет на info."""
 			endpoints = {
-				"info": "/info",
-				"health": "/health",
-				"sse": "/sse",
-				"streamable_http": "/mcp/"
-			}
+					"info": "/info",
+					"health": "/health",
+					"sse": "/sse",
+					"streamable_http": "/mcp/"
+				}
 			if self.config.auth_mode == "oauth2":
 				endpoints["oauth2"] = {
-					"well_known": "/.well-known/oauth-protected-resource",
+					"well_known_prm": "/.well-known/oauth-protected-resource",
+					"well_known_as": "/.well-known/oauth-authorization-server",
+					"register": "/register",
 					"authorize": "/authorize",
 					"token": "/token"
 				}
@@ -315,6 +334,82 @@ class MCPHttpServer:
 				public_url = f"{scheme}://{netloc}"
 			
 			return self.oauth2_service.generate_prm_document(public_url)
+		
+		@self.app.get("/.well-known/oauth-authorization-server")
+		async def well_known_as_metadata(request: Request):
+			"""Authorization Server Metadata (RFC 8414)."""
+			# Определяем публичный URL
+			if self.config.public_url:
+				base_url = self.config.public_url
+			else:
+				# Формируем из текущего запроса
+				scheme = request.url.scheme
+				netloc = request.headers.get("host", f"{request.client.host}:{request.url.port}")
+				base_url = f"{scheme}://{netloc}"
+			
+			return {
+				"issuer": base_url,
+				"authorization_endpoint": f"{base_url}/authorize",
+				"token_endpoint": f"{base_url}/token",
+				"registration_endpoint": f"{base_url}/register",  # Добавляем registration endpoint
+				"grant_types_supported": [
+					"authorization_code",
+					"refresh_token",
+					"password"  # Добавляем Password Grant для простоты
+				],
+				"response_types_supported": ["code"],
+				"code_challenge_methods_supported": ["S256"],
+				"token_endpoint_auth_methods_supported": ["none"],  # Публичный клиент, без client_secret
+				"revocation_endpoint_auth_methods_supported": ["none"]
+			}
+		
+		@self.app.post("/register")
+		async def register_client(request: Request):
+			"""Dynamic Client Registration (RFC 7591) - упрощённая версия.
+			
+			Всегда возвращает фиксированный client_id для публичного клиента.
+			Игнорирует параметры регистрации, т.к. у нас нет реальной БД клиентов.
+			"""
+			# Читаем тело запроса (но не используем, т.к. всё равно вернём фиксированные данные)
+			try:
+				body = await request.json()
+				logger.debug(f"Client registration request: {body}")
+			except:
+				body = {}
+			
+			# Определяем публичный URL для redirect_uris
+			if self.config.public_url:
+				base_url = self.config.public_url
+			else:
+				scheme = request.url.scheme
+				netloc = request.headers.get("host", f"{request.client.host}:{request.url.port}")
+				base_url = f"{scheme}://{netloc}"
+			
+			# Возвращаем фиксированные данные публичного клиента
+			client_data = {
+				"client_id": "mcp-public-client",
+				"client_secret": "",  # Пустой для публичного клиента
+				"client_id_issued_at": 1640000000,  # Фиксированная дата
+				"grant_types": ["authorization_code", "refresh_token", "password"],
+				"response_types": ["code"],
+				"redirect_uris": [
+					f"{base_url}/callback",
+					"http://localhost/callback",
+					"http://127.0.0.1/callback"
+				],
+				"token_endpoint_auth_method": "none",  # Публичный клиент
+				"application_type": "web"
+			}
+			
+			# Если клиент передал свои redirect_uris, добавляем их
+			if "redirect_uris" in body:
+				for uri in body.get("redirect_uris", []):
+					if uri not in client_data["redirect_uris"]:
+						client_data["redirect_uris"].append(uri)
+			
+			logger.info(f"Client registration: вернули фиксированный client_id='mcp-public-client'")
+			
+			return client_data
 		
 		@self.app.get("/authorize")
 		async def authorize_get(
@@ -467,9 +562,56 @@ class MCPHttpServer:
 			code: str = Form(None),
 			redirect_uri: str = Form(None),
 			code_verifier: str = Form(None),
-			refresh_token: str = Form(None)
+			refresh_token: str = Form(None),
+			username: str = Form(None),
+			password: str = Form(None)
 		):
-			"""Token endpoint для обмена code на токены или refresh."""
+			"""Token endpoint для обмена code на токены, refresh или password grant."""
+			
+			# Password Grant - самый простой вариант
+			if grant_type == "password":
+				if not username or not password:
+					return JSONResponse(
+						status_code=400,
+						content={"error": "invalid_request", "error_description": "Missing username or password"}
+					)
+				
+				# Валидация креденшилов через 1С
+				try:
+					async with httpx.AsyncClient(timeout=10.0) as client:
+						health_url = f"{self.config.onec_url}/hs/{self.config.onec_service_root}/health"
+						response = await client.get(
+							health_url,
+							auth=httpx.BasicAuth(username, password)
+						)
+						
+						if response.status_code != 200:
+							return JSONResponse(
+								status_code=400,
+								content={"error": "invalid_grant", "error_description": "Invalid username or password"}
+							)
+				except Exception as e:
+					logger.error(f"Ошибка проверки креденшилов 1С для password grant: {e}")
+					return JSONResponse(
+						status_code=503,
+						content={"error": "server_error", "error_description": "Unable to validate credentials"}
+					)
+				
+				# Генерируем простой токен (base64 от username:password с префиксом)
+				import base64
+				creds_string = f"{username}:{password}"
+				simple_token = "simple_" + base64.b64encode(creds_string.encode()).decode()
+				
+				logger.info(f"Password grant выдан для пользователя {username}")
+				
+				return {
+					"access_token": simple_token,
+					"token_type": "Bearer",
+					"expires_in": 86400,  # 24 часа (для простоты)
+					"scope": "mcp"
+				}
+			
+			# Authorization Code Grant
 			if grant_type == "authorization_code":
 				# Обмен code на токены
 				if not all([code, redirect_uri, code_verifier]):

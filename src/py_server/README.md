@@ -1,132 +1,364 @@
 # MCP-прокси сервер для 1С
 
-Этот модуль реализует MCP (Model Context Protocol) прокси-сервер для взаимодействия с 1С. Прокси позволяет MCP-клиентам подключаться к инструментам, ресурсам и промптам, реализованным в 1С.
+## Что это
 
-## Архитектура
+Прокси-сервер между MCP-клиентами (Claude Desktop, Cursor) и 1С:Предприятие. Транслирует MCP-протокол в JSON-RPC вызовы к HTTP-сервису 1С.
 
-```
-MCP Client <-> MCP Proxy (Python) <-> 1C HTTP Service
-```
+**Возможности:**
+- Два транспорта: stdio (для нативных клиентов) и HTTP (для веб)
+- Проксирование всех MCP-примитивов: Tools, Resources, Prompts
+- Опциональная OAuth2 авторизация с per-user креденшилами
+- Асинхронная архитектура для множественных подключений
 
-- **MCP Client**: Любой клиент, поддерживающий протокол MCP (Claude Desktop, Cursor, и т.д.)
-- **MCP Proxy**: Этот Python-сервер, который преобразует MCP-запросы в HTTP-запросы к 1С
-- **1C HTTP Service**: HTTP-сервис в 1С, который обрабатывает запросы и возвращает данные
+## Быстрый старт
 
-## Возможности
+### Требования
 
-- ✅ Поддержка протокола MCP 1.9.1+
-- ✅ Два режима работы: stdio и HTTP с SSE
-- ✅ Проксирование всех типов MCP-примитивов:
-  - **Tools** (инструменты) - функции для выполнения действий
-  - **Resources** (ресурсы) - данные для контекста
-  - **Prompts** (промпты) - шаблоны сообщений
-- ✅ Автоматическое переподключение к 1С
-- ✅ Подробное логирование
-- ✅ Конфигурация через переменные окружения
-- ✅ CORS поддержка для веб-клиентов
+- **Python 3.13** (рекомендуется) или 3.11+
+- 1С:Предприятие 8.3.20+ с опубликованным HTTP-сервисом
 
-## Установка
+### Установка
 
-1. Установите зависимости:
 ```bash
+# Создание виртуального окружения
+python -m venv venv
+
+# Активация
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Linux/Mac
+
+# Установка зависимостей
 pip install -r requirements.txt
 ```
 
-2. Конфигурация сервера (в отдельном файле .env для случая запуска в HTTP-режиме с SSE):
-```bash
-cp env.example .env
+### Выбор режима работы
+
+#### Stdio режим
+
+Для локальных MCP-клиентов (Claude Desktop, Cursor).
+
+Настройки указываются в конфигурации клиента через переменные окружения.
+
+**Минимальная конфигурация клиента:**
+```json
+{
+  "mcpServers": {
+    "1c-server": {
+      "command": "python",
+      "args": ["-m", "src.py_server"],
+      "env": {
+        "MCP_ONEC_URL": "http://localhost/base",
+        "MCP_ONEC_USERNAME": "admin",
+        "MCP_ONEC_PASSWORD": "password"
+      }
+    }
+  }
+}
 ```
 
-3. Отредактируйте `.env` файл с вашими настройками 1С:
-```bash
-MCP_ONEC_URL=http://localhost/your_base_name
-MCP_ONEC_USERNAME=your_username
-MCP_ONEC_PASSWORD=your_password
-```
+Примеры конфигураций для разных клиентов: [`../../mcp_client_settings/`](../../mcp_client_settings/)
 
-## Использование
+#### HTTP режим
 
-### Режим stdio (для MCP-клиентов)
+Для веб-приложений и множественных клиентов.
 
-Для использования с MCP-клиентами типа Claude Desktop:
+Настройки указываются в файле `.env` в корне проекта или через переменные окружения:
 
 ```bash
-python -m src.py_server
+# Скопируйте пример
+copy src\py_server\env.example .env  # Windows
+cp src/py_server/env.example .env    # Linux/Mac
 ```
 
-### Режим HTTP-сервера (для веб-клиентов)
+**Минимальный .env:**
+```ini
+MCP_ONEC_URL=http://localhost/base
+MCP_ONEC_USERNAME=admin
+MCP_ONEC_PASSWORD=password
+```
 
-Для использования с веб-приложениями:
-
+**Запуск:**
 ```bash
 python -m src.py_server http --port 8000
 ```
 
-HTTP-сервер предоставляет следующие endpoints:
-- `GET /` - информация о сервере
-- `GET /info` - подробная информация о сервере
-- `GET /health` - проверка состояния
-- `*/mcp/` - основной HTTP endpoint для MCP
-- `GET /sse` - SSE подключение для совместимости со старыми клиентами
-- `POST /sse/messages/` - отправка сообщений через SSE
+## Режимы работы
 
-### Параметры командной строки
+### Stdio режим
+
+- Общение через stdin/stdout
+- Используется локальными MCP-клиентами
+- Логи идут в stderr
+
+### HTTP режим
+
+**Endpoints:**
+- `/mcp/` - Streamable HTTP транспорт (основной)
+- `/sse` - SSE транспорт (устаревший, но поддерживается)
+- `/health` - проверка состояния
+- `/info` - информация о сервере
+- `/` - список endpoints
+
+**Проверка работы:**
+```bash
+curl http://localhost:8000/health
+```
+
+## Режимы авторизации
+
+### Без OAuth2 (по умолчанию)
 
 ```bash
-# Основные команды
-python -m src.py_server stdio                    # Stdio режим
-python -m src.py_server http                     # HTTP режим
-
-# Дополнительные параметры
-python -m src.py_server http --host 0.0.0.0 --port 8080
-python -m src.py_server stdio --log-level DEBUG
-python -m src.py_server http --env-file custom.env
-
-# Переопределение настроек 1С
-python -m src.py_server stdio \
-  --onec-url http://server/base \
-  --onec-username admin \
-  --onec-password secret \
-  --onec-service-root custom_mcp
+MCP_AUTH_MODE=none  # по умолчанию
 ```
+
+**Поведение:**
+- Все обращения к 1С выполняются от одного пользователя
+- Креденшилы задаются в конфигурации: `MCP_ONEC_USERNAME` и `MCP_ONEC_PASSWORD`
+- Используется Basic Auth для всех запросов к 1С
+
+### С OAuth2
+
+```bash
+MCP_AUTH_MODE=oauth2
+MCP_PUBLIC_URL=http://your-server:8000
+```
+
+**Поведение:**
+- Каждый клиент авторизуется своими креденшилами 1С
+- Креденшилы передаются через OAuth2 flow
+- `MCP_ONEC_USERNAME` и `MCP_ONEC_PASSWORD` не используются (опциональны для резервного подключения)
+
+**Поддерживаемые OAuth2 flows:**
+- **Password Grant** - передача username/password напрямую
+- **Authorization Code + PKCE** - авторизация через HTML-форму
+- **Dynamic Client Registration** - автоматическая регистрация клиентов
+
+**Дополнительные endpoints (для OAuth2):**
+- `/.well-known/oauth-protected-resource` - Protected Resource Metadata
+- `/.well-known/oauth-authorization-server` - Authorization Server Metadata
+- `/register` - регистрация клиентов
+- `/authorize` - HTML форма авторизации
+- `/token` - получение/обновление токенов
+
+Детали OAuth2: см. раздел "Примеры использования" и `agents.md`
 
 ## Конфигурация
 
-Все настройки можно задать через переменные окружения с префиксом `MCP_`:
+Все настройки задаются через переменные окружения с префиксом `MCP_` или через CLI аргументы.
+
+### Подключение к 1С
 
 | Переменная | Описание | По умолчанию | Обязательная |
 |------------|----------|--------------|--------------|
-| `MCP_ONEC_URL` | URL базы 1С | - | ✅ |
-| `MCP_ONEC_USERNAME` | Имя пользователя 1С | - | ✅ |
-| `MCP_ONEC_PASSWORD` | Пароль пользователя 1С | - | ✅ |
-| `MCP_ONEC_SERVICE_ROOT` | Корневой URL HTTP-сервиса | `mcp` | ❌ |
-| `MCP_HOST` | Хост HTTP-сервера | `127.0.0.1` | ❌ |
-| `MCP_PORT` | Порт HTTP-сервера | `8000` | ❌ |
-| `MCP_SERVER_NAME` | Имя MCP-сервера | `1C-MCP-Proxy` | ❌ |
-| `MCP_SERVER_VERSION` | Версия MCP-сервера | `1.0.0` | ❌ |
+| `MCP_ONEC_URL` | URL базы 1С | - | ✅ Всегда |
+| `MCP_ONEC_USERNAME` | Имя пользователя | - | ✅ При `AUTH_MODE=none` |
+| `MCP_ONEC_PASSWORD` | Пароль | - | ✅ При `AUTH_MODE=none` |
+| `MCP_ONEC_SERVICE_ROOT` | Корень HTTP-сервиса | `mcp` | ❌ |
+
+### HTTP-сервер
+
+| Переменная | Описание | По умолчанию | Обязательная |
+|------------|----------|--------------|--------------|
+| `MCP_HOST` | Хост для прослушивания | `127.0.0.1` | ❌ |
+| `MCP_PORT` | Порт | `8000` | ❌ |
+| `MCP_CORS_ORIGINS` | CORS origins (JSON array) | `["*"]` | ❌ |
+
+### MCP
+
+| Переменная | Описание | По умолчанию | Обязательная |
+|------------|----------|--------------|--------------|
+| `MCP_SERVER_NAME` | Имя сервера | `1C Configuration Data Tools` | ❌ |
+| `MCP_SERVER_VERSION` | Версия | `1.0.0` | ❌ |
 | `MCP_LOG_LEVEL` | Уровень логирования | `INFO` | ❌ |
-| `MCP_CORS_ORIGINS` | Разрешенные CORS origins | `["*"]` | ❌ |
+
+Допустимые уровни: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+
+### OAuth2
+
+| Переменная | Описание | По умолчанию | Обязательная |
+|------------|----------|--------------|--------------|
+| `MCP_AUTH_MODE` | Режим: `none` или `oauth2` | `none` | ❌ |
+| `MCP_PUBLIC_URL` | Публичный URL прокси | (определяется из запроса) | ✅ При `AUTH_MODE=oauth2` для HTTP режима |
+| `MCP_OAUTH2_CODE_TTL` | TTL authorization code (сек) | `120` | ❌ |
+| `MCP_OAUTH2_ACCESS_TTL` | TTL access token (сек) | `3600` | ❌ |
+| `MCP_OAUTH2_REFRESH_TTL` | TTL refresh token (сек) | `1209600` | ❌ |
+
+### CLI аргументы
+
+Переопределяют переменные окружения:
+
+```bash
+python -m src.py_server http \
+  --onec-url http://server/base \
+  --onec-username admin \
+  --onec-password secret \
+  --auth-mode oauth2 \
+  --public-url http://proxy:8000 \
+  --port 8000 \
+  --log-level DEBUG
+```
+
+Полный список аргументов:
+```bash
+python -m src.py_server --help
+```
+
+## Архитектура
+
+### Общая схема
+
+```
+┌─────────────────┐
+│   MCP Client    │  (Claude Desktop, Cursor)
+│  (stdio/HTTP)   │
+└────────┬────────┘
+         │ MCP Protocol
+         ↓
+┌────────────────────┐
+│  Python Proxy      │
+│  - mcp_server      │  Проксирование MCP → JSON-RPC
+│  - http_server     │  HTTP/SSE транспорты + OAuth2
+│  - stdio_server    │  Stdio транспорт
+│  - onec_client     │  HTTP-клиент для 1С
+└────────┬───────────┘
+         │ JSON-RPC over HTTP
+         │ Basic Auth (username:password)
+         ↓
+┌────────────────────┐
+│  1C HTTP Service   │  /hs/mcp/rpc
+│  (расширение)      │
+└────────────────────┘
+```
+
+### Модули
+
+- **`main.py`** - CLI парсинг и запуск
+- **`config.py`** - конфигурация через Pydantic
+- **`mcp_server.py`** - ядро MCP-сервера (проксирование)
+- **`onec_client.py`** - асинхронный HTTP-клиент для 1С
+- **`http_server.py`** - HTTP/SSE транспорт + OAuth2
+- **`stdio_server.py`** - stdio транспорт
+- **`auth/oauth2.py`** - OAuth2 авторизация (Store + Service)
+
+### Проксирование MCP-примитивов
+
+Все MCP-запросы транслируются в JSON-RPC к 1С:
+
+**Tools (инструменты):**
+- `tools/list` → список доступных инструментов
+- `tools/call` → вызов инструмента с аргументами
+
+**Resources (ресурсы):**
+- `resources/list` → список доступных ресурсов
+- `resources/read` → чтение содержимого ресурса
+
+**Prompts (промпты):**
+- `prompts/list` → список доступных промптов
+- `prompts/get` → получение промпта с параметрами
+
+## Примеры использования
+
+### Проверка подключения к 1С
+
+```bash
+# HTTP режим
+curl http://localhost:8000/health
+
+# Ожидаемый ответ
+{
+  "status": "healthy",
+  "onec_connection": "ok",
+  "auth": {"mode": "none"}
+}
+```
+
+### Информация о сервере
+
+```bash
+curl http://localhost:8000/info
+```
+
+### OAuth2: Password Grant (упрощённый)
+
+```bash
+# 1. Получить токен
+curl -X POST http://localhost:8000/token \
+  -d "grant_type=password" \
+  -d "username=admin" \
+  -d "password=secret"
+
+# Ответ:
+# {
+#   "access_token": "simple_...",
+#   "token_type": "Bearer",
+#   "expires_in": 86400,
+#   "scope": "mcp"
+# }
+
+# 2. Использовать токен для доступа
+curl http://localhost:8000/mcp/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### OAuth2: Authorization Code + PKCE (стандартный)
+
+```bash
+# 1. Discovery
+curl http://localhost:8000/.well-known/oauth-authorization-server
+
+# 2. Регистрация клиента
+curl -X POST http://localhost:8000/register \
+  -H "Content-Type: application/json" \
+  -d '{"client_name": "My Client"}'
+
+# 3. Авторизация (в браузере)
+# http://localhost:8000/authorize?response_type=code&client_id=mcp-public-client&...
+
+# 4. Обмен кода на токены
+curl -X POST http://localhost:8000/token \
+  -d "grant_type=authorization_code" \
+  -d "code=<authorization_code>" \
+  -d "redirect_uri=http://localhost/callback" \
+  -d "code_verifier=<code_verifier>"
+```
+
+### Логирование
+
+```bash
+# DEBUG режим для отладки
+python -m src.py_server http --log-level DEBUG
+
+# Логи показывают:
+# - Все HTTP запросы к 1С
+# - OAuth2 операции (генерация/валидация токенов)
+# - MCP операции (tools/resources/prompts)
+# - Ошибки подключения
+```
 
 ## Интеграция с 1С
 
-Прокси ожидает, что в 1С реализован HTTP-сервис и обращается к нему по стандартной схеме 1С:
-
+Прокси ожидает HTTP-сервис в 1С по адресу:
 ```
-<URL базы 1С>/hs/<корневой URL HTTP-сервиса>/<endpoint>
+{MCP_ONEC_URL}/hs/{MCP_ONEC_SERVICE_ROOT}/
 ```
 
-По умолчанию корневой URL HTTP-сервиса - `mcp`, но его можно изменить через параметр `MCP_ONEC_SERVICE_ROOT`.
+Например: `http://localhost/base/hs/mcp/`
 
-### POST /hs/{service_root}/rpc
-Обрабатывает JSON-RPC запросы для всех MCP-операций:
-- `tools/list` - список инструментов
-- `tools/call` - вызов инструмента
-- `resources/list` - список ресурсов
-- `resources/read` - чтение ресурса
-- `prompts/list` - список промптов
-- `prompts/get` - получение промпта
+### Endpoints 1С
 
-Пример JSON-RPC запроса:
+1. **`GET /health`**
+   - Проверка доступности сервиса
+   - Ответ: `{"status": "ok"}`
+   - Используется для валидации креденшилов в OAuth2
+
+2. **`POST /rpc`**
+   - JSON-RPC endpoint для всех MCP-операций
+   - Content-Type: `application/json`
+   - Basic Auth: `username:password`
+
+### Формат JSON-RPC запроса
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -136,24 +368,42 @@ python -m src.py_server stdio \
 }
 ```
 
-## Отладка
+### Формат JSON-RPC ответа
 
-Включите подробное логирование:
-```bash
-python -m src.py_server --log-level DEBUG
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": [
+      {
+        "name": "get_metadata",
+        "description": "Получить метаданные объекта",
+        "inputSchema": {...}
+      }
+    ]
+  }
+}
 ```
 
-Проверьте состояние HTTP-сервера:
-```bash
-curl http://localhost:8000/health
-```
+Подробности реализации 1С-стороны: `../1c_ext/agents.md`
 
-## Требования к 1С
+## Документация
 
-- 1С:Предприятие 8.3.20+
-- Расширение MCP-сервер (см. `../1c_ext/`)
-- HTTP-сервис должен быть опубликован и доступен
+### Для разработчиков
 
-## Лицензия
+- **`agents.md`** - полная документация архитектуры для AI-агентов
+  - Детальное описание всех модулей
+  - Протоколы взаимодействия
+  - OAuth2 flows
+  - Точки расширения
+  
+### Конфигурация
 
-MIT License
+- **`env.example`** - пример `.env` файла со всеми параметрами
+
+---
+
+**MIT License**
+
+Проект активно развивается. Вопросы и предложения приветствуются через Issues.
