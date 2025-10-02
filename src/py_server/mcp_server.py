@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
+import contextvars
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, Dict, List, Optional, AsyncIterator, Tuple
 
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
@@ -15,6 +16,12 @@ from .config import Config
 
 
 logger = logging.getLogger(__name__)
+
+# Context var для per-session креденшилов 1С (login, password)
+current_onec_credentials: contextvars.ContextVar[Optional[Tuple[str, str]]] = contextvars.ContextVar(
+	'current_onec_credentials',
+	default=None
+)
 
 
 class MCPProxy:
@@ -43,11 +50,30 @@ class MCPProxy:
 		"""Управление жизненным циклом сервера."""
 		logger.debug(f"Инициализация MCP сервера '{self.config.server_name}' v{self.config.server_version}")
 		
+		# Определяем креденшилы для текущей сессии
+		# При auth_mode=oauth2 берём из context var (per-session), иначе из конфигурации
+		session_creds = None
+		if self.config.auth_mode == "oauth2":
+			session_creds = current_onec_credentials.get()
+			if session_creds:
+				username, password = session_creds
+				logger.debug(f"Использую per-session креденшилы для пользователя: {username}")
+			else:
+				# Fallback на дефолтные (для совместимости)
+				username = self.config.onec_username
+				password = self.config.onec_password
+				logger.debug("Per-session креденшилы не найдены, использую дефолтные из конфигурации")
+		else:
+			# Режим none - используем дефолтные креды
+			username = self.config.onec_username
+			password = self.config.onec_password
+			logger.debug(f"Режим auth_mode=none, использую дефолтные креденшилы: {username}")
+		
 		# Инициализация при запуске
 		self.onec_client = OneCClient(
 			base_url=self.config.onec_url,
-			username=self.config.onec_username,
-			password=self.config.onec_password,
+			username=username,
+			password=password,
 			service_root=self.config.onec_service_root
 		)
 		
