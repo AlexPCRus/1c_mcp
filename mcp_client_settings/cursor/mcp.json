@@ -15,10 +15,7 @@
           "MCP_ONEC_USERNAME":"Администратор",
           "MCP_ONEC_PASSWORD":"",
           
-          "MCP_ONEC_SERVICE_ROOT":"mcp",
-          
-          "MCP_SERVER_NAME":"1C-Metadata",
-          "MCP_SERVER_VERSION":"1.0.0"
+          "MCP_ONEC_SERVICE_ROOT":"mcp"
         }
       },
       "1c-server-http": {
