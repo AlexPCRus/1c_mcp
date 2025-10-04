@@ -1,5 +1,8 @@
 {
     "mcpServers": {
+      "1c-server-direct": {
+        "url": "http://localhost/your_base_name/hs/mcp/"
+      },
       "1c-server-stdio": {
         "command": "d:/rep/1c_mcp/venv/Scripts/python.exe",
         "args": ["-m", "src.py_server"],
@@ -23,9 +26,6 @@
       },
       "1c-server-http-sse": {
         "url": "http://127.0.0.1:8000/sse"
-      },
-      "1c-server-direct": {
-        "url": "http://localhost/your_base_name/hs/mcp/mcp"
-      },
+      }
     }
   }
