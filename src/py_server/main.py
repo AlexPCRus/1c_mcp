@@ -56,6 +56,11 @@ def create_parser() -> argparse.ArgumentParser:
   MCP_HOST               - Хост HTTP-сервера (по умолчанию: 127.0.0.1)
   MCP_PORT               - Порт HTTP-сервера (по умолчанию: 8000)
   MCP_LOG_LEVEL          - Уровень логирования (по умолчанию: INFO)
+  MCP_AUTH_MODE          - Режим авторизации: none или oauth2 (по умолчанию: none)
+  MCP_PUBLIC_URL         - Публичный URL для OAuth2 (опционально)
+  MCP_OAUTH2_CODE_TTL    - TTL authorization code в секундах (по умолчанию: 120)
+  MCP_OAUTH2_ACCESS_TTL  - TTL access token в секундах (по умолчанию: 3600)
+  MCP_OAUTH2_REFRESH_TTL - TTL refresh token в секундах (по умолчанию: 1209600)
 		"""
 	)
 	
@@ -113,6 +118,19 @@ def create_parser() -> argparse.ArgumentParser:
 		help="Порт для HTTP-сервера (только для режима http)"
 	)
 	
+	# OAuth2 аргументы
+	parser.add_argument(
+		"--auth-mode",
+		type=str,
+		choices=["none", "oauth2"],
+		help="Режим авторизации: none или oauth2"
+	)
+	parser.add_argument(
+		"--public-url",
+		type=str,
+		help="Публичный URL прокси для OAuth2"
+	)
+	
 	return parser
 
 
@@ -167,6 +185,10 @@ async def main():
 		os.environ["MCP_PORT"] = str(args.port)
 	if args.log_level:
 		os.environ["MCP_LOG_LEVEL"] = args.log_level
+	if args.auth_mode:
+		os.environ["MCP_AUTH_MODE"] = args.auth_mode
+	if args.public_url:
+		os.environ["MCP_PUBLIC_URL"] = args.public_url
 	
 	# Получаем конфигурацию (теперь валидация пройдет успешно)
 	try:

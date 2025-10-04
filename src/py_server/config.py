@@ -1,7 +1,7 @@
 """Конфигурация MCP-прокси сервера."""
 
 import os
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -28,6 +28,13 @@ class Config(BaseSettings):
 	
 	# Настройки безопасности
 	cors_origins: list[str] = Field(default=["*"], description="Разрешенные CORS origins")
+	
+	# Настройки авторизации OAuth2
+	auth_mode: Literal["none", "oauth2"] = Field(default="none", description="Режим авторизации: none или oauth2")
+	public_url: Optional[str] = Field(default=None, description="Публичный URL прокси для OAuth2 (если не задан, формируется из запроса)")
+	oauth2_code_ttl: int = Field(default=120, description="TTL authorization code в секундах")
+	oauth2_access_ttl: int = Field(default=3600, description="TTL access token в секундах")
+	oauth2_refresh_ttl: int = Field(default=1209600, description="TTL refresh token в секундах (14 дней)")
 	
 	class Config:
 		env_file = ".env"
