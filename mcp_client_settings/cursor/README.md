@@ -25,11 +25,7 @@
 ### ⚡ **Прямое подключение к 1С (без прокси)**
 ```json
 "1c-server-direct": {
-  "url": "http://localhost/your_base_name/hs/mcp/mcp",
-  "auth": {
-    "username": "your_username",
-    "password": "your_password"
-  }
+  "url": "http://localhost/your_base_name/hs/mcp/"
 }
 ```
 
